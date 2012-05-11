@@ -19,6 +19,7 @@
 
 	<root level="debug">
 		<appender-ref ref="file" />
+		<appender-ref ref="console" />
 	</root>
 	
 </configuration>

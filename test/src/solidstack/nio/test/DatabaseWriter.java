@@ -94,7 +94,7 @@ public class DatabaseWriter extends Thread
 					b = buffer.getAndSet( new LinkedList<Element>() );
 				}
 				if( b.isEmpty() )
-					sleep0( 500 );
+					sleep0( 100 );
 				else
 				{
 					for( Element element : b )

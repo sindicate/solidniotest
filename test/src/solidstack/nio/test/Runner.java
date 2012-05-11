@@ -66,7 +66,7 @@ public class Runner
 			this.last += 1000;
 
 			int[] sockets = this.client.getSocketCount();
-			System.out.println( "Complete: " + this.completed + ", failed: " + this.failed + ", timeout: " + this.timedOut + ", sockets: " + sockets[ 0 ] + ", pooled: " + sockets[ 1 ] );
+			Loggers.nio.debug( "Complete: " + this.completed + ", failed: " + this.failed + ", timeout: " + this.timedOut + ", sockets: " + sockets[ 0 ] + ", pooled: " + sockets[ 1 ] );
 		}
 	}
 }

@@ -1,26 +1,31 @@
 package solidstack.nio.test;
 
+import java.io.IOException;
+import java.io.InputStream;
+
+import solidstack.io.FatalIOException;
 import solidstack.lang.ThreadInterrupted;
+import solidstack.nio.Loggers;
 
 public class RampGenerator
 {
 	private Runner runner;
-	private int rate;
-	private int ramp = 30000;
+	private int goal;
+	private int rampPeriod = 30000;
 
 	public void setReceiver( Runner runner )
 	{
 		this.runner = runner;
 	}
 
-	public void setRate( int rate )
+	public void setGoal( int goal )
 	{
-		this.rate = rate;
+		this.goal = goal;
 	}
 
 	public void setRamp( int seconds )
 	{
-		this.ramp = seconds * 1000;
+		this.rampPeriod = seconds * 1000;
 	}
 
 	private void sleep( long millis )
@@ -37,40 +42,85 @@ public class RampGenerator
 
 	public void run()
 	{
+		InputStream in = System.in;
+
 		int rate = 1;
-		long start = System.currentTimeMillis();
-		long base = start;
-		int done = 0;
+
+		long rampStartMillis = System.currentTimeMillis();
+		int rampBaseRate = rate;
+		int rampDelta = this.goal - rampBaseRate;
+
+		long triggerStartMillis = rampStartMillis;
+		int triggerCount = 0;
+
 		int sleep = 1000 / rate;
 		if( sleep < 10 ) sleep = 10;
-		long last = start;
+
 		while( true )
 		{
-			sleep( sleep );
-
 			long now = System.currentTimeMillis();
-			int need = (int)( ( now - base ) * rate / 1000 );
-			int diff = need - done;
 
-			for( int i = 0; i < diff; i++ )
-				this.runner.trigger(); // FIXME Need ThreadPool
-
-			done += diff;
-			if( done >= 1000 )
+			// Listen to the keyboard
+			try
 			{
-				base = now;
-				done = 0;
+				while( in.available() > 0 )
+				{
+					int ch = in.read();
+					if( ch == 'a' )
+					{
+						this.goal += 100;
+						rampStartMillis = now; // restart the ramp up
+						rampBaseRate = rate;
+						rampDelta = this.goal - rate;
+						Loggers.nio.debug( "Goal: {}", this.goal );
+					}
+					else if( ch == 'b' )
+					{
+						if( this.goal <= 100 )
+							this.goal = 1;
+						else
+							this.goal -= 100;
+						rampStartMillis = now; // restart the ramp up
+						rampBaseRate = rate;
+						rampDelta = this.goal - rate;
+						Loggers.nio.debug( "Goal: {}", this.goal );
+					}
+				}
+			}
+			catch( IOException e )
+			{
+				throw new FatalIOException( e );
 			}
 
-			long running = now - start;
-			if( running < this.ramp )
+			// Adjust the rate as a function of the goal and the ramp
+			long running = now - rampStartMillis;
+			int oldRate = rate;
+			if( running < this.rampPeriod )
 			{
-				rate = (int)( this.rate * running / this.ramp );
+				rate = rampBaseRate + (int)( rampDelta * running / this.rampPeriod );
 				sleep = 1000 / rate;
 				if( sleep < 10 ) sleep = 10;
 			}
 			else
-				rate = this.rate;
+				rate = this.goal;
+			if( rate != oldRate )
+				Loggers.nio.debug( "Rate: {}", rate );
+
+			// Determine how many to trigger
+			int need = (int)( ( now - triggerStartMillis ) * rate / 1000 );
+			int diff = need - triggerCount;
+
+			for( int i = 0; i < diff; i++ )
+				this.runner.trigger(); // FIXME Need ThreadPool
+
+			triggerCount += diff;
+			if( triggerCount >= 100000 )
+			{
+				triggerStartMillis = now;
+				triggerCount = 0;
+			}
+
+			sleep( sleep );
 
 //			if( now - last >= 1000 )
 //			{
