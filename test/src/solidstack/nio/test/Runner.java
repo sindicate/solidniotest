@@ -1,5 +1,8 @@
 package solidstack.nio.test;
 
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadPoolExecutor;
+
 import solidstack.httpclient.Request;
 import solidstack.httpclient.Response;
 import solidstack.httpclient.ResponseProcessor;
@@ -12,10 +15,12 @@ public class Runner
 {
 	private int counter;
 	private Dispatcher dispatcher;
-	private Client client;
-	private Request request;
+	Client client;
+	Request request;
+	private ThreadPoolExecutor executor = (ThreadPoolExecutor)Executors.newCachedThreadPool();
 
 	private int started;
+	private int discarded;
 	int completed;
 	int timedOut;
 	int failed;
@@ -25,7 +30,7 @@ public class Runner
 	public Runner( Dispatcher dispatcher )
 	{
 		this.dispatcher = dispatcher;
-		this.client = new Client( "localhost", 8001, dispatcher );
+		this.client = new Client( "192.168.0.105", 8001, dispatcher );
 		this.request = new Request( "/" );
 //		this.request.setHeader( "Host", "www.nu.nl" );
 	}
@@ -34,31 +39,43 @@ public class Runner
 	{
 //		System.out.println( "triggered " + this.counter++ );
 
-		try
+		if( this.executor.getActiveCount() < 100 )
 		{
-			this.client.request( this.request, new ResponseProcessor()
+			this.executor.execute( new Runnable()
 			{
-				public void timeout()
+				@Override
+				public void run()
 				{
-					Runner.this.timedOut ++;
-				}
+					try
+					{
+						Runner.this.client.request( Runner.this.request, new ResponseProcessor()
+						{
+							public void timeout()
+							{
+								Runner.this.timedOut ++;
+							}
 
-				public void process( Response response )
-				{
-					if( response.getStatus() == 200 )
-						Runner.this.completed ++;
-					else
+							public void process( Response response )
+							{
+								if( response.getStatus() == 200 )
+									Runner.this.completed ++;
+								else
+									Runner.this.failed ++;
+							}
+						} );
+					}
+					catch( FatalIOException e )
+					{
 						Runner.this.failed ++;
+						Loggers.nio.debug( "", e );
+					}
 				}
 			} );
-		}
-		catch( FatalIOException e )
-		{
-			this.failed ++;
-			Loggers.nio.debug( "", e );
-		}
 
-		this.started ++;
+			this.started ++;
+		}
+		else
+			this.discarded ++;
 
 		long now = System.currentTimeMillis();
 		if( now - this.last >= 1000 )
@@ -66,7 +83,7 @@ public class Runner
 			this.last += 1000;
 
 			int[] sockets = this.client.getSocketCount();
-			Loggers.nio.debug( "Complete: " + this.completed + ", failed: " + this.failed + ", timeout: " + this.timedOut + ", sockets: " + sockets[ 0 ] + ", pooled: " + sockets[ 1 ] );
+			Loggers.nio.debug( "Complete: " + this.completed + ", failed: " + this.failed + ", discarded: " + this.discarded + ", timeout: " + this.timedOut + ", sockets: " + sockets[ 0 ] + ", pooled: " + sockets[ 1 ] );
 		}
 	}
 }

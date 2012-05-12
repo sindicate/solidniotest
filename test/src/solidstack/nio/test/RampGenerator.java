@@ -111,7 +111,7 @@ public class RampGenerator
 			int diff = need - triggerCount;
 
 			for( int i = 0; i < diff; i++ )
-				this.runner.trigger(); // FIXME Need ThreadPool
+				this.runner.trigger();
 
 			triggerCount += diff;
 			if( triggerCount >= 100000 )

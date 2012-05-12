@@ -51,6 +51,7 @@ public class DatabaseWriter extends Thread
 		try
 		{
 			this.connection = DriverManager.getConnection( "jdbc:hsqldb:file:hsample", "", "" );
+			this.connection.setAutoCommit( false );
 			this.insert = this.connection.prepareStatement( "INSERT INTO TEST ( TEXT ) VALUES ( ? )" );
 		}
 		catch( SQLException e )
