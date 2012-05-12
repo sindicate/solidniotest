@@ -26,7 +26,8 @@ public class DatabaseWriter extends Thread
 	{
 		try
 		{
-			Connection connection = DriverManager.getConnection( "jdbc:derby:sample;create=true", "", "" );
+//			Connection connection = DriverManager.getConnection( "jdbc:derby:sample;create=true", "", "" );
+			Connection connection = DriverManager.getConnection( "jdbc:hsqldb:file:hsample", "", "" );
 			try
 			{
 				connection.createStatement().executeUpdate( "CREATE TABLE TEST ( TEXT VARCHAR( 1000 ) )" );
@@ -49,7 +50,7 @@ public class DatabaseWriter extends Thread
 
 		try
 		{
-			this.connection = DriverManager.getConnection( "jdbc:derby:sample;create=true", "", "" );
+			this.connection = DriverManager.getConnection( "jdbc:hsqldb:file:hsample", "", "" );
 			this.insert = this.connection.prepareStatement( "INSERT INTO TEST ( TEXT ) VALUES ( ? )" );
 		}
 		catch( SQLException e )
