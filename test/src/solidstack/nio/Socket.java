@@ -87,7 +87,10 @@ public class Socket implements Runnable
 			returnToPool();
 		else
 			if( l != 1 )
+			{
+				close();
 				Assert.fail( "Expected 1, was " + l );
+			}
 	}
 
 	public SocketInputStream getInputStream()
