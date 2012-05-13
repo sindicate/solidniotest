@@ -1,6 +1,6 @@
 package solidstack.nio.test;
 
-import solidstack.nio.Dispatcher;
+import solidstack.nio.SocketMachine;
 
 public class TestClient
 {
@@ -8,7 +8,7 @@ public class TestClient
 	{
 		System.setProperty( "logback.configurationFile", "solidstack/nio/test/logback-testclient.xml" );
 
-		Dispatcher dispatcher = new Dispatcher();
+		SocketMachine dispatcher = new SocketMachine();
 		dispatcher.start();
 
 		RampGenerator generator = new RampGenerator();

@@ -22,7 +22,7 @@ import solidstack.lang.Assert;
 import solidstack.lang.ThreadInterrupted;
 
 
-public class Dispatcher extends Thread
+public class SocketMachine extends Thread
 {
 	static private int threadId;
 
@@ -33,14 +33,14 @@ public class Dispatcher extends Thread
 	private ThreadPoolExecutor executor;
 
 	// TODO Build the timeouts on the keys?
-	private Map<ReadListener, Timeout> timeouts = new LinkedHashMap<ReadListener, Timeout>(); // TODO Use DelayQueue or other form of concurrent datastructure
+	private Map<ResponseReader, Timeout> timeouts = new LinkedHashMap<ResponseReader, Timeout>(); // TODO Use DelayQueue or other form of concurrent datastructure
 	private long nextTimeout;
 
-	private List<HandlerPool> pools = new ArrayList<HandlerPool>();
+	private List<SocketPool> pools = new ArrayList<SocketPool>();
 
 	private long nextLogging;
 
-	public Dispatcher()
+	public SocketMachine()
 	{
 		super( "Dispatcher-" + nextId() );
 		setPriority( NORM_PRIORITY + 1 );
@@ -72,12 +72,12 @@ public class Dispatcher extends Thread
 		this.executor.execute( command );
 	}
 
-	public void listen( InetSocketAddress address, ReadListener listener ) throws IOException
+	public void listen( InetSocketAddress address, ResponseReader listener ) throws IOException
 	{
 		listen( address, 50, listener );
 	}
 
-	public void listen( InetSocketAddress address, int backlog, ReadListener listener ) throws IOException
+	public void listen( InetSocketAddress address, int backlog, ResponseReader listener ) throws IOException
 	{
 		ServerSocketChannel server = ServerSocketChannel.open();
 		server.configureBlocking( false );
@@ -132,23 +132,15 @@ public class Dispatcher extends Thread
 		}
 	}
 
-	public SocketChannelHandler connect( String hostname, int port ) throws IOException
+	public Socket connect( String hostname, int port )
 	{
-		SocketChannelHandler handler = new SocketChannelHandler( this );
-		connect( hostname, port, handler );
-		Loggers.nio.trace( "Channel ({}) New" , handler.getDebugId() );
-		return handler;
+		Socket socket = new Socket( false, this );
+		connect( hostname, port, socket );
+		Loggers.nio.trace( "Channel ({}) New" , socket.getDebugId() );
+		return socket;
 	}
 
-	public AsyncSocketChannelHandler connectAsync( String hostname, int port )
-	{
-		AsyncSocketChannelHandler handler = new AsyncSocketChannelHandler( this );
-		connect( hostname, port, handler );
-		Loggers.nio.trace( "Channel ({}) New" , handler.getDebugId() );
-		return handler;
-	}
-
-	private void connect( String hostname, int port, SocketChannelHandler handler )
+	private void connect( String hostname, int port, Socket handler )
 	{
 		try
 		{
@@ -169,15 +161,15 @@ public class Dispatcher extends Thread
 		}
 	}
 
-	public void addTimeout( ReadListener listener, long when )
+	public void addTimeout( ResponseReader listener, Socket handler, long when )
 	{
 		synchronized( this.timeouts )
 		{
-			this.timeouts.put( listener, new Timeout( listener, when ) );
+			this.timeouts.put( listener, new Timeout( listener, handler, when ) );
 		}
 	}
 
-	public void removeTimeout( ReadListener listener )
+	public void removeTimeout( ResponseReader listener )
 	{
 		synchronized( this.timeouts )
 		{
@@ -185,7 +177,7 @@ public class Dispatcher extends Thread
 		}
 	}
 
-	public void addHandlerPool( HandlerPool pool )
+	public void registerSocketPool( SocketPool pool )
 	{
 		synchronized( this.pools )
 		{
@@ -276,17 +268,18 @@ public class Dispatcher extends Thread
 								SocketChannel channel = server.accept();
 								if( channel != null )
 								{
-									ReadListener listener = (ReadListener)key.attachment();
+									ResponseReader listener = (ResponseReader)key.attachment();
 
 									channel.configureBlocking( false );
-									key = channel.register( this.selector, 0 /* SelectionKey.OP_READ */ ); // TODO Maybe the handler should do that
+									key = channel.register( this.selector, 0 );
 
-									ServerSocketChannelHandler handler = new ServerSocketChannelHandler( this, key );
-									handler.setListener( listener );
-									key.attach( handler );
+									Socket socket = new Socket( true, this );
+									socket.setKey( key );
+									socket.setReader( listener );
+									key.attach( socket );
 
-									Loggers.nio.trace( "Channel ({}) New channel, Readable", handler.getDebugId() );
-									handler.dataIsReady();
+									Loggers.nio.trace( "Channel ({}) New channel, Readable", socket.getDebugId() );
+									socket.dataIsReady();
 								}
 								else
 									Loggers.nio.trace( "Lost accept" );
@@ -307,7 +300,7 @@ public class Dispatcher extends Thread
 								key.interestOps( key.interestOps() ^ SelectionKey.OP_READ );
 							}
 
-							SocketChannelHandler handler = (SocketChannelHandler)key.attachment();
+							Socket handler = (Socket)key.attachment();
 							handler.dataIsReady();
 						}
 
@@ -322,7 +315,7 @@ public class Dispatcher extends Thread
 								key.interestOps( key.interestOps() ^ SelectionKey.OP_WRITE );
 							}
 
-							SocketChannelHandler handler = (SocketChannelHandler)key.attachment();
+							Socket handler = (Socket)key.attachment();
 							handler.writeIsReady();
 						}
 
@@ -337,9 +330,9 @@ public class Dispatcher extends Thread
 					}
 					catch( CancelledKeyException e )
 					{
-						if( key.attachment() instanceof SocketChannelHandler )
+						if( key.attachment() instanceof Socket )
 						{
-							SocketChannelHandler handler = (SocketChannelHandler)key.attachment();
+							Socket handler = (Socket)key.attachment();
 							handler.close(); // TODO Signal the pool
 						}
 					}
@@ -377,9 +370,9 @@ public class Dispatcher extends Thread
 					}
 
 					for( Timeout timeout : timedouts )
-						timeout.getListener().timeout();
+						timeout.getListener().timeout( timeout.getHandler() );
 
-					for( HandlerPool pool : this.pools )
+					for( SocketPool pool : this.pools )
 						pool.timeout();
 
 //					// TODO This should not be needed

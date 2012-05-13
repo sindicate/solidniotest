@@ -10,12 +10,12 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import solidstack.lang.SystemException;
 import solidstack.lang.ThreadInterrupted;
-import solidstack.nio.Dispatcher;
+import solidstack.nio.SocketMachine;
 import solidstack.nio.Loggers;
 
 public class DatabaseWriter extends Thread
 {
-	private Dispatcher dispatcher;
+	private SocketMachine dispatcher;
 	private PreparedStatement insert;
 	private Connection connection;
 
@@ -43,7 +43,7 @@ public class DatabaseWriter extends Thread
 		}
 	}
 
-	public DatabaseWriter( Dispatcher dispatcher )
+	public DatabaseWriter( SocketMachine dispatcher )
 	{
 		this.dispatcher = dispatcher;
 		setPriority( NORM_PRIORITY + 1 );

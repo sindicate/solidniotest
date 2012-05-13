@@ -1,4 +1,4 @@
-package solidstack.hyperdb;
+package solidstack.nio.test;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -10,7 +10,7 @@ import solidstack.httpclient.Response;
 import solidstack.httpclient.ResponseProcessor;
 import solidstack.httpclient.nio.Client;
 import solidstack.io.FatalIOException;
-import solidstack.nio.Dispatcher;
+import solidstack.nio.SocketMachine;
 
 public class Test
 {
@@ -31,7 +31,7 @@ public class Test
 //
 //		Assert.fail();
 
-		Dispatcher dispatcher = new Dispatcher();
+		SocketMachine dispatcher = new SocketMachine();
 		dispatcher.start();
 
 		Client client = new Client( "www.nu.nl", 80, dispatcher );

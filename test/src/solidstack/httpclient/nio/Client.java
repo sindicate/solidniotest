@@ -16,95 +16,98 @@ import solidstack.httpserver.HttpException;
 import solidstack.httpserver.HttpHeaderTokenizer;
 import solidstack.httpserver.Token;
 import solidstack.io.FatalIOException;
-import solidstack.nio.AsyncSocketChannelHandler;
-import solidstack.nio.Dispatcher;
-import solidstack.nio.HandlerPool;
-import solidstack.nio.ReadListener;
+import solidstack.nio.ResponseReader;
+import solidstack.nio.Socket;
+import solidstack.nio.SocketMachine;
+import solidstack.nio.SocketPool;
 
 
 public class Client
 {
-	Dispatcher dispatcher;
+	SocketMachine machine;
 	private String hostname;
 	private int port;
-	HandlerPool pool;
+	SocketPool pool;
 //	int sockets;
 
 	// TODO Maximum number of connections
 	// TODO Non blocking request when waiting on a connections?
-	public Client( String hostname, int port, Dispatcher dispatcher )
+	public Client( String hostname, int port, SocketMachine machine )
 	{
-		this.dispatcher = dispatcher;
+		this.machine = machine;
 		this.hostname = hostname;
 		this.port = port;
 
-		this.pool = new HandlerPool();
-		dispatcher.addHandlerPool( this.pool ); // TODO Need Client.close() which removes this pool from the dispatcher
+		this.pool = new SocketPool();
+		machine.registerSocketPool( this.pool ); // TODO Need Client.close() which removes this pool from the dispatcher
 	}
 
 	public int[] getSocketCount()
 	{
-		return new int[] { this.pool.total(), this.pool.size() };
+		return this.pool.getSocketCount();
 	}
 
 	public void request( Request request, final ResponseProcessor processor )
 	{
-		AsyncSocketChannelHandler handler = (AsyncSocketChannelHandler)this.pool.getHandler();
-		if( handler == null )
+		Socket socket = this.pool.getSocket();
+		if( socket == null )
 		{
-			handler = this.dispatcher.connectAsync( this.hostname, this.port );
-			this.pool.addHandler( handler );
-			handler.setPool( this.pool );
+			socket = this.machine.connect( this.hostname, this.port );
+			this.pool.addSocket( socket );
+			socket.setPool( this.pool );
 		}
 
-		handler.doubleAcquire();
+		socket.doubleAcquire(); // Need 2 releases: this request and the received response
+		boolean complete = false;
+		try
+		{
+			MyResponseReader reader = new MyResponseReader( processor );
+			socket.setReader( reader );
 
-		MyConnectionListener listener = new MyConnectionListener( processor, handler );
-		handler.setListener( listener );
+			this.machine.addTimeout( reader, socket, System.currentTimeMillis() + 10000 );
 
-		this.dispatcher.addTimeout( listener, System.currentTimeMillis() + 10000 );
+			sendRequest( request, socket.getOutputStream() );
 
-//		Assert.isTrue( handler.busy.compareAndSet( false, true ) );
-		sendRequest( request, handler.getOutputStream() );
-
-		handler.release();
-//		if( listener.latch.decrementAndGet() == 0 )
-//			this.pool.putHandler( handler );
+			complete = true;
+		}
+		finally
+		{
+			if( complete )
+				socket.release();
+			else
+				socket.close();
+		}
 	}
 
 	// TODO Add to timeout manager
-	public class MyConnectionListener implements ReadListener
+	public class MyResponseReader implements ResponseReader
 	{
-		volatile private ResponseProcessor processor; // TODO Make this final
-		private AsyncSocketChannelHandler handler;
-//		AtomicInteger latch = new AtomicInteger( 2 );
+		final private ResponseProcessor processor;
 
-		public MyConnectionListener( ResponseProcessor processor, AsyncSocketChannelHandler handler )
+		public MyResponseReader( ResponseProcessor processor )
 		{
 			this.processor = processor;
-			this.handler = handler;
 		}
 
-		public void incoming( AsyncSocketChannelHandler handler ) throws IOException
+		public void incoming( Socket socket ) throws IOException
 		{
-			Response response = receiveResponse( handler.getInputStream() );
+			Response response = receiveResponse( socket.getInputStream() );
 			InputStream in = response.getInputStream();
 			this.processor.process( response );
-			this.processor = null;
+//			this.processor = null;
 			drain( in, null );
 
 			// TODO Is this the right spot? How to coordinate this with the timeout event?
-			Client.this.dispatcher.removeTimeout( this );
-
-//			Assert.isTrue( handler.busy.compareAndSet( true, false ) );
+			// TODO Maybe just timeout the socket and remove the timeout in the release.
+			Client.this.machine.removeTimeout( this );
 		}
 
-		public void timeout() throws IOException
+		public void timeout( Socket handler ) throws IOException
 		{
 			if( this.processor != null )
 			{
 				this.processor.timeout();
-				this.handler.timeout();
+				handler.timeout();
 			}
 		}
 	}

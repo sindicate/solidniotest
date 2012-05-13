@@ -8,13 +8,13 @@ import solidstack.httpclient.Response;
 import solidstack.httpclient.ResponseProcessor;
 import solidstack.httpclient.nio.Client;
 import solidstack.io.FatalIOException;
-import solidstack.nio.Dispatcher;
+import solidstack.nio.SocketMachine;
 import solidstack.nio.Loggers;
 
 public class Runner
 {
 	private int counter;
-	private Dispatcher dispatcher;
+	private SocketMachine dispatcher;
 	Client client;
 	Request request;
 	private ThreadPoolExecutor executor = (ThreadPoolExecutor)Executors.newCachedThreadPool();
@@ -27,10 +27,11 @@ public class Runner
 
 	private long last = System.currentTimeMillis();
 
-	public Runner( Dispatcher dispatcher )
+	public Runner( SocketMachine dispatcher )
 	{
 		this.dispatcher = dispatcher;
-		this.client = new Client( "192.168.0.105", 8001, dispatcher );
+//		this.client = new Client( "192.168.0.105", 8001, dispatcher );
+		this.client = new Client( "localhost", 8001, dispatcher );
 		this.request = new Request( "/" );
 //		this.request.setHeader( "Host", "www.nu.nl" );
 	}

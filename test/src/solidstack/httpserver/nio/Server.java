@@ -16,19 +16,19 @@ import solidstack.httpserver.Response;
 import solidstack.httpserver.Token;
 import solidstack.httpserver.UrlEncodedParser;
 import solidstack.lang.SystemException;
-import solidstack.nio.AsyncSocketChannelHandler;
-import solidstack.nio.Dispatcher;
-import solidstack.nio.ReadListener;
+import solidstack.nio.SocketMachine;
+import solidstack.nio.ResponseReader;
+import solidstack.nio.Socket;
 
 
 public class Server
 {
 	private int port;
 	private ApplicationContext application; // TODO Make this a Map
-	private Dispatcher dispatcher;
+	private SocketMachine dispatcher;
 //	boolean debug;
 
-	public Server( Dispatcher dispatcher, int port ) throws IOException
+	public Server( SocketMachine dispatcher, int port ) throws IOException
 	{
 		this.dispatcher = dispatcher;
 		this.port = port;
@@ -46,14 +46,14 @@ public class Server
 		return this.application;
 	}
 
-	public Dispatcher getDispatcher()
+	public SocketMachine getDispatcher()
 	{
 		return this.dispatcher;
 	}
 
-	public class MyConnectionListener implements ReadListener
+	public class MyConnectionListener implements ResponseReader
 	{
-		public void incoming( AsyncSocketChannelHandler handler ) throws IOException
+		public void incoming( Socket handler ) throws IOException
 		{
 			Request request = new Request();
 
@@ -194,7 +194,7 @@ public class Server
 			}
 		}
 
-		public void timeout() throws IOException
+		public void timeout( Socket handler ) throws IOException
 		{
 			throw new UnsupportedOperationException();
 		}

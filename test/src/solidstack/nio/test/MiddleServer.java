@@ -3,12 +3,12 @@ package solidstack.nio.test;
 import java.io.IOException;
 
 import solidstack.httpserver.nio.Server;
-import solidstack.nio.Dispatcher;
+import solidstack.nio.SocketMachine;
 
 
 public class MiddleServer
 {
-	static public Dispatcher dispatcher;
+	static public SocketMachine dispatcher;
 
 	/**
 	 * @param args
@@ -18,7 +18,7 @@ public class MiddleServer
 	{
 		System.setProperty( "logback.configurationFile", "solidstack/nio/test/logback-middle.xml" );
 
-		dispatcher = new Dispatcher();
+		dispatcher = new SocketMachine();
 
 		Server server = new Server( dispatcher, 8002 );
 		server.setApplication( new MiddleServerApplication() );

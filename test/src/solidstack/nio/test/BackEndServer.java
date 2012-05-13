@@ -3,7 +3,7 @@ package solidstack.nio.test;
 import java.io.IOException;
 
 import solidstack.httpserver.nio.Server;
-import solidstack.nio.Dispatcher;
+import solidstack.nio.SocketMachine;
 
 
 public class BackEndServer
@@ -16,7 +16,7 @@ public class BackEndServer
 	{
 		System.setProperty( "logback.configurationFile", "solidstack/nio/test/logback-backend.xml" );
 
-		Dispatcher dispatcher = new Dispatcher();
+		SocketMachine dispatcher = new SocketMachine();
 		dispatcher.setMaxConnections( 500 );
 
 		Server server = new Server( dispatcher, 8001 );

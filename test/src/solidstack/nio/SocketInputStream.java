@@ -9,12 +9,12 @@ import solidstack.httpserver.FatalSocketException;
 import solidstack.lang.Assert;
 
 
-public class SocketChannelInputStream extends InputStream
+public class SocketInputStream extends InputStream
 {
-	private SocketChannelHandler handler;
+	private Socket handler;
 	private ByteBuffer buffer;
 
-	public SocketChannelInputStream( SocketChannelHandler handler )
+	public SocketInputStream( Socket handler )
 	{
 		this.handler = handler;
 		this.buffer = ByteBuffer.allocate( 8192 );

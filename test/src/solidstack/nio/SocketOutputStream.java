@@ -11,14 +11,14 @@ import solidstack.lang.Assert;
 
 
 // TODO Improve performance?
-public class SocketChannelOutputStream extends OutputStream
+public class SocketOutputStream extends OutputStream
 {
-	private SocketChannelHandler handler;
+	private Socket handler;
 	private ByteBuffer buffer;
 //	private AtomicBoolean block = new AtomicBoolean();
 	private AtomicReference<Thread> block = new AtomicReference<Thread>();
 
-	public SocketChannelOutputStream( SocketChannelHandler handler )
+	public SocketOutputStream( Socket handler )
 	{
 		this.handler = handler;
 		this.buffer = ByteBuffer.allocate( 8192 );
