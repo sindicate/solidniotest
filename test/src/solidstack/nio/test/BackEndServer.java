@@ -16,27 +16,32 @@ public class BackEndServer
 	{
 		System.setProperty( "logback.configurationFile", "solidstack/nio/test/logback-backend.xml" );
 
-		SocketMachine dispatcher = new SocketMachine();
-		dispatcher.setMaxConnections( 500 );
+		SocketMachine machine = new SocketMachine();
+		machine.setMaxConnections( 500 );
 
-		Server server = new Server( dispatcher, 8001 );
+		Server server = new Server( machine, 8001 );
 		server.setApplication( new BackEndServerApplication() );
 
-		DatabaseWriter writer1 = new DatabaseWriter( dispatcher );
-		DatabaseWriter writer2 = new DatabaseWriter( dispatcher );
-		DatabaseWriter writer3 = new DatabaseWriter( dispatcher );
-		DatabaseWriter writer4 = new DatabaseWriter( dispatcher );
+		DatabaseWriter writer1 = new DatabaseWriter( machine );
+		DatabaseWriter writer2 = new DatabaseWriter( machine );
+		DatabaseWriter writer3 = new DatabaseWriter( machine );
+		DatabaseWriter writer4 = new DatabaseWriter( machine );
 
 		writer1.start();
 		writer2.start();
 		writer3.start();
 		writer4.start();
 
-		dispatcher.run();
-
-		writer1.interrupt();
-		writer2.interrupt();
-		writer3.interrupt();
-		writer4.interrupt();
+		try
+		{
+			machine.run();
+		}
+		finally
+		{
+			writer1.interrupt();
+			writer2.interrupt();
+			writer3.interrupt();
+			writer4.interrupt();
+		}
 	}
 }

@@ -16,9 +16,10 @@ import solidstack.httpserver.Response;
 import solidstack.httpserver.Token;
 import solidstack.httpserver.UrlEncodedParser;
 import solidstack.lang.SystemException;
-import solidstack.nio.SocketMachine;
 import solidstack.nio.ResponseReader;
+import solidstack.nio.ServerSocket;
 import solidstack.nio.Socket;
+import solidstack.nio.SocketMachine;
 
 
 public class Server
@@ -33,7 +34,8 @@ public class Server
 		this.dispatcher = dispatcher;
 		this.port = port;
 
-		dispatcher.listen( new InetSocketAddress( port ), new MyConnectionListener() );
+		ServerSocket socket = dispatcher.listen( new InetSocketAddress( port ) );
+		socket.setReader( new MyConnectionListener() );
 	}
 
 	public void setApplication( ApplicationContext application )

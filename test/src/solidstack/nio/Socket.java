@@ -18,7 +18,7 @@ import solidstack.lang.Assert;
 public class Socket implements Runnable
 {
 	private boolean server;
-	private SocketMachine dispatcher;
+	private SocketMachine machine;
 	private SelectionKey key;
 	private SocketInputStream in;
 	private SocketOutputStream out;
@@ -33,10 +33,10 @@ public class Socket implements Runnable
 	private AtomicInteger latch = new AtomicInteger( 0 ); // For assertions
 
 
-	public Socket( boolean server, SocketMachine dispatcher )
+	public Socket( boolean server, SocketMachine machine )
 	{
 		this.server = server;
-		this.dispatcher = dispatcher;
+		this.machine = machine;
 
 		this.in = new SocketInputStream( this );
 		this.out = new SocketOutputStream( this );
@@ -103,9 +103,9 @@ public class Socket implements Runnable
 		return this.out;
 	}
 
-	public SocketMachine getDispatcher()
+	public SocketMachine getMachine()
 	{
-		return this.dispatcher;
+		return this.machine;
 	}
 
 	SocketChannel getChannel()
@@ -135,7 +135,7 @@ public class Socket implements Runnable
 		{
 			if( this.server )
 				acquire();
-			getDispatcher().execute( this ); // TODO Also for write
+			getMachine().execute( this ); // TODO Also for write
 			Loggers.nio.trace( "Channel ({}) Started thread", getDebugId() );
 			return;
 		}
@@ -216,7 +216,7 @@ public class Socket implements Runnable
 			this.pool.releaseSocket( this );
 			this.lastPooled = System.currentTimeMillis();
 		}
-		this.dispatcher.listenRead( this.key ); // TODO The socket needs to be reading, otherwise client disconnects do not come through
+		this.machine.listenRead( this.key ); // TODO The socket needs to be reading, otherwise client disconnects do not come through
 	}
 
 	public void run()

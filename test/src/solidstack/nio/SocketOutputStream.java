@@ -116,7 +116,7 @@ public class SocketOutputStream extends OutputStream
 					synchronized( this )
 					{
 						// Prevent losing a notify: listenWriter() must be called within the synchronized block
-						this.handler.getDispatcher().listenWrite( this.handler.getKey() );
+						this.handler.getMachine().listenWrite( this.handler.getKey() );
 						wait();
 					}
 				}

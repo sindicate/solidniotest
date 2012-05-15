@@ -72,21 +72,63 @@ public class SocketMachine extends Thread
 		this.executor.execute( command );
 	}
 
-	public void listen( InetSocketAddress address, ResponseReader listener ) throws IOException
+	public ServerSocket listen( InetSocketAddress address ) throws IOException
 	{
-		listen( address, 50, listener );
+		return listen( address, 50 );
 	}
 
-	public void listen( InetSocketAddress address, int backlog, ResponseReader listener ) throws IOException
+	public ServerSocket listen( InetSocketAddress address, int backlog ) throws IOException
 	{
 		ServerSocketChannel server = ServerSocketChannel.open();
 		server.configureBlocking( false );
 		server.socket().bind( address, backlog );
 
-		synchronized( this.lock ) // Prevent register from blocking again
+		ServerSocket socket = new ServerSocket( this );
+
+		try
 		{
-			this.selector.wakeup();
-			server.register( this.selector, SelectionKey.OP_ACCEPT, listener );
+			SelectionKey key;
+			synchronized( this.lock ) // Prevent register from blocking again
+			{
+				this.selector.wakeup();
+				key = server.register( this.selector, 0 );
+			}
+			socket.setKey( key );
+			key.attach( socket );
+		}
+		catch( IOException e )
+		{
+			throw new FatalIOException( e );
+		}
+
+		//		synchronized( this.lock ) // Prevent register from blocking again
+//		{
+//			this.selector.wakeup();
+//			server.register( this.selector, SelectionKey.OP_ACCEPT, serverSocket );
+//		}
+
+		Loggers.nio.trace( "Channel ({}) New" , socket.getDebugId() ); // TODO Need to distinguish server and client
+		return socket;
+	}
+
+	public void listenAccept( SelectionKey key )
+	{
+		boolean yes = false;
+		synchronized( key )
+		{
+			int i = key.interestOps();
+			if( ( i & SelectionKey.OP_ACCEPT ) == 0 )
+			{
+				key.interestOps( i | SelectionKey.OP_ACCEPT );
+				yes = true;
+			}
+		}
+
+		if( yes )
+		{
+			key.selector().wakeup();
+			if( Loggers.nio.isTraceEnabled() )
+				Loggers.nio.trace( "Channel ({}) Listening to accept", DebugId.getId( key.channel() ) );
 		}
 	}
 
@@ -105,6 +147,7 @@ public class SocketMachine extends Thread
 
 		if( yes )
 		{
+			// TODO Can we reduce the wakeups a lot?
 			key.selector().wakeup();
 			if( Loggers.nio.isTraceEnabled() )
 				Loggers.nio.trace( "Channel ({}) Listening to read", DebugId.getId( key.channel() ) );
@@ -140,7 +183,7 @@ public class SocketMachine extends Thread
 		return socket;
 	}
 
-	private void connect( String hostname, int port, Socket handler )
+	private void connect( String hostname, int port, Socket socket )
 	{
 		try
 		{
@@ -152,8 +195,8 @@ public class SocketMachine extends Thread
 				this.selector.wakeup();
 				key = channel.register( this.selector, SelectionKey.OP_READ );
 			}
-			handler.setKey( key );
-			key.attach( handler );
+			socket.setKey( key );
+			key.attach( socket );
 		}
 		catch( IOException e )
 		{
@@ -268,15 +311,15 @@ public class SocketMachine extends Thread
 								SocketChannel channel = server.accept();
 								if( channel != null )
 								{
-									ResponseReader listener = (ResponseReader)key.attachment();
+									ServerSocket serverSocket = (ServerSocket)key.attachment();
 
 									channel.configureBlocking( false );
 									key = channel.register( this.selector, 0 );
 
 									Socket socket = new Socket( true, this );
 									socket.setKey( key );
-									socket.setReader( listener );
 									key.attach( socket );
+									socket.setReader( serverSocket.getReader() );
 
 									Loggers.nio.trace( "Channel ({}) New channel, Readable", socket.getDebugId() );
 									socket.dataIsReady();
@@ -399,21 +442,23 @@ public class SocketMachine extends Thread
 		{
 			throw new FatalIOException( e );
 		}
-
-		if( this.executor.isTerminated() )
-			Loggers.nio.info( "Dispatcher ended" );
-		else
+		finally
 		{
-			Loggers.nio.info( "Dispatcher ended, shutting down thread pool" );
-			try
+			if( this.executor.isTerminated() )
+				Loggers.nio.info( "Dispatcher ended" );
+			else
 			{
-				shutdownThreadPool();
+				Loggers.nio.info( "Dispatcher ended, shutting down thread pool" );
+				try
+				{
+					shutdownThreadPool();
+				}
+				catch( InterruptedException e )
+				{
+					throw new ThreadInterrupted();
+				}
+				Loggers.nio.info( "Thread pool shut down" );
 			}
-			catch( InterruptedException e )
-			{
-				throw new ThreadInterrupted();
-			}
-			Loggers.nio.info( "Thread pool shut down" );
 		}
 	}
 }

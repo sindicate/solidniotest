@@ -10,8 +10,8 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import solidstack.lang.SystemException;
 import solidstack.lang.ThreadInterrupted;
-import solidstack.nio.SocketMachine;
 import solidstack.nio.Loggers;
+import solidstack.nio.SocketMachine;
 
 public class DatabaseWriter extends Thread
 {
@@ -68,6 +68,7 @@ public class DatabaseWriter extends Thread
 		}
 		catch( InterruptedException e )
 		{
+			Loggers.nio.debug( getName() + " interrupted" );
 			throw new ThreadInterrupted();
 		}
 	}
