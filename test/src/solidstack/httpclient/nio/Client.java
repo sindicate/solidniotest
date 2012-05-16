@@ -16,61 +16,39 @@ import solidstack.httpserver.HttpException;
 import solidstack.httpserver.HttpHeaderTokenizer;
 import solidstack.httpserver.Token;
 import solidstack.io.FatalIOException;
+import solidstack.nio.ClientSocket;
 import solidstack.nio.ResponseReader;
 import solidstack.nio.Socket;
 import solidstack.nio.SocketMachine;
-import solidstack.nio.SocketPool;
 
 
 public class Client
 {
 	SocketMachine machine;
-	private String hostname;
-	private int port;
-	SocketPool pool;
-	private int maxConnections = 100;
-//	int sockets;
 
-	// TODO Maximum number of connections
+	private ClientSocket socket;
+
 	// TODO Non blocking request when waiting on a connections?
 	public Client( String hostname, int port, SocketMachine machine )
 	{
 		this.machine = machine;
-		this.hostname = hostname;
-		this.port = port;
 
-		this.pool = new SocketPool();
-		machine.registerSocketPool( this.pool ); // TODO Need Client.close() which removes this pool from the dispatcher
+		this.socket = machine.createClientSocket( hostname, port );
 	}
 
 	public void setMaxConnections( int maxConnections )
 	{
-		this.maxConnections = maxConnections;
+		this.socket.setMaxConnections( maxConnections );
 	}
 
 	public int[] getSocketCount()
 	{
-		return this.pool.getSocketCount();
+		return this.socket.getSocketCount();
 	}
 
 	public void request( Request request, final ResponseProcessor processor )
 	{
-		Socket socket = this.pool.getSocket();
-		if( socket == null )
-		{
-			// TODO Maybe the pool should make the connections
-			// TODO Maybe we need a queue and the pool executes the queue when a connection is released
-			if( this.pool.total() >= this.maxConnections )
-			{
-//				throw new TooManyConnectionsException();
-				socket = this.pool.waitForSocket();
-			}
-			else
-			{
-				socket = this.machine.connect( this.hostname, this.port );
-				this.pool.addSocket( socket );
-			}
-		}
+		Socket socket = this.socket.getSocket();
 
 		socket.doubleAcquire(); // Need 2 releases: this request and the received response
 		boolean complete = false;

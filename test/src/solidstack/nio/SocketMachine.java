@@ -104,6 +104,11 @@ public class SocketMachine extends Thread
 		return socket;
 	}
 
+	public ClientSocket createClientSocket( String hostname, int port )
+	{
+		return new ClientSocket( hostname, port, this );
+	}
+
 	public void listenAccept( SelectionKey key )
 	{
 		boolean yes = false;
@@ -337,8 +342,8 @@ public class SocketMachine extends Thread
 								key.interestOps( key.interestOps() ^ SelectionKey.OP_READ );
 							}
 
-							Socket handler = (Socket)key.attachment();
-							handler.dataIsReady();
+							Socket socket = (Socket)key.attachment();
+							socket.dataIsReady();
 						}
 
 						if( key.isWritable() )
@@ -352,8 +357,8 @@ public class SocketMachine extends Thread
 								key.interestOps( key.interestOps() ^ SelectionKey.OP_WRITE );
 							}
 
-							Socket handler = (Socket)key.attachment();
-							handler.writeIsReady();
+							Socket socket = (Socket)key.attachment();
+							socket.writeIsReady();
 						}
 
 						if( key.isConnectable() )
@@ -369,8 +374,8 @@ public class SocketMachine extends Thread
 					{
 						if( key.attachment() instanceof Socket )
 						{
-							Socket handler = (Socket)key.attachment();
-							handler.close(); // TODO Signal the pool
+							Socket socket = (Socket)key.attachment();
+							socket.close(); // TODO Signal the pool
 						}
 					}
 				}

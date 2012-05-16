@@ -1,4 +1,4 @@
-package solidstack.httpclient.nio;
+package solidstack.nio;
 
 public class TooManyConnectionsException extends RuntimeException
 {

@@ -1,21 +1,40 @@
 package solidstack.nio;
 
+import java.nio.channels.SelectionKey;
 
-public class ServerSocket extends Socket
+
+public class ServerSocket
 {
+	private SocketMachine machine;
+	private SelectionKey key;
+
 	private int maxConnections;
 	private SocketPool pool = new SocketPool();
+	private ResponseReader reader;
+
+	private int debugId;
+
 
 	public ServerSocket( SocketMachine machine )
 	{
-		super( true, machine );
+		this.machine = machine;
 	}
 
-	@Override
+	void setKey( SelectionKey key )
+	{
+		this.key = key;
+		this.debugId = DebugId.getId( key.channel() );
+	}
+
 	public void setReader( ResponseReader reader )
 	{
-		super.setReader( reader );
-		getMachine().listenAccept( getKey() );
+		this.reader = reader;
+		this.machine.listenAccept( this.key );
+	}
+
+	protected ResponseReader getReader()
+	{
+		return this.reader;
 	}
 
 	public void setMaxConnections( int maxConnections )
@@ -31,5 +50,10 @@ public class ServerSocket extends Socket
 	public void addSocket( Socket socket )
 	{
 		this.pool.addSocket( socket );
+	}
+
+	int getDebugId()
+	{
+		return this.debugId;
 	}
 }
