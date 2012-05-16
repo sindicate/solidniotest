@@ -26,8 +26,6 @@ public class SocketMachine extends Thread
 {
 	static private int threadId;
 
-	private int maxConnections = 100;
-
 	private Selector selector;
 	private Object lock = new Object(); // Used to sequence socket creation and registration
 	private ThreadPoolExecutor executor;
@@ -42,7 +40,7 @@ public class SocketMachine extends Thread
 
 	public SocketMachine()
 	{
-		super( "Dispatcher-" + nextId() );
+		super( "SocketMachine-" + nextId() );
 		setPriority( NORM_PRIORITY + 1 );
 
 		try
@@ -54,11 +52,6 @@ public class SocketMachine extends Thread
 			throw new FatalIOException( e );
 		}
 		this.executor = (ThreadPoolExecutor)Executors.newCachedThreadPool();
-	}
-
-	public void setMaxConnections( int maxConnections )
-	{
-		this.maxConnections = maxConnections;
 	}
 
 	synchronized static private int nextId()
@@ -286,7 +279,6 @@ public class SocketMachine extends Thread
 				Loggers.nio.trace( "Selected {} keys", selected );
 
 				Set< SelectionKey > keys = this.selector.selectedKeys();
-				boolean canAccept = this.selector.keys().size() < this.maxConnections;
 				for( SelectionKey key : keys )
 				{
 					try
@@ -305,20 +297,21 @@ public class SocketMachine extends Thread
 							Assert.isTrue( key.channel().isOpen() );
 
 						if( key.isAcceptable() )
-							if( canAccept )
+						{
+							ServerSocket serverSocket = (ServerSocket)key.attachment();
+							if( serverSocket.canAccept() )
 							{
 								ServerSocketChannel server = (ServerSocketChannel)key.channel();
 								SocketChannel channel = server.accept();
 								if( channel != null )
 								{
-									ServerSocket serverSocket = (ServerSocket)key.attachment();
-
 									channel.configureBlocking( false );
 									key = channel.register( this.selector, 0 );
 
 									Socket socket = new Socket( true, this );
 									socket.setKey( key );
 									key.attach( socket );
+									serverSocket.addSocket( socket );
 									socket.setReader( serverSocket.getReader() );
 
 									Loggers.nio.trace( "Channel ({}) New channel, Readable", socket.getDebugId() );
@@ -329,6 +322,7 @@ public class SocketMachine extends Thread
 							}
 							else
 								Loggers.nio.trace( "Max connections reached, can't accept" );
+						}
 
 						if( key.isReadable() )
 						{

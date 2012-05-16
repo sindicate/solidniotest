@@ -27,6 +27,7 @@ public class Server
 	private int port;
 	private ApplicationContext application; // TODO Make this a Map
 	private SocketMachine dispatcher;
+	private ServerSocket socket;
 //	boolean debug;
 
 	public Server( SocketMachine dispatcher, int port ) throws IOException
@@ -34,8 +35,8 @@ public class Server
 		this.dispatcher = dispatcher;
 		this.port = port;
 
-		ServerSocket socket = dispatcher.listen( new InetSocketAddress( port ) );
-		socket.setReader( new MyConnectionListener() );
+		this.socket = dispatcher.listen( new InetSocketAddress( port ) );
+		this.socket.setReader( new MyRequestReader() );
 	}
 
 	public void setApplication( ApplicationContext application )
@@ -53,13 +54,18 @@ public class Server
 		return this.dispatcher;
 	}
 
-	public class MyConnectionListener implements ResponseReader
+	public void setMaxConnections( int maxConnections )
 	{
-		public void incoming( Socket handler ) throws IOException
+		this.socket.setMaxConnections( maxConnections );
+	}
+
+	public class MyRequestReader implements ResponseReader
+	{
+		public void incoming( Socket socket ) throws IOException
 		{
 			Request request = new Request();
 
-			HttpHeaderTokenizer tokenizer = new HttpHeaderTokenizer( handler.getInputStream() );
+			HttpHeaderTokenizer tokenizer = new HttpHeaderTokenizer( socket.getInputStream() );
 
 			String line = tokenizer.getLine();
 			String[] parts = line.split( "[ \t]+" );
@@ -125,7 +131,7 @@ public class Server
 				if( contentLength != null )
 				{
 					int len = Integer.parseInt( contentLength );
-					UrlEncodedParser parser = new UrlEncodedParser( handler.getInputStream(), len );
+					UrlEncodedParser parser = new UrlEncodedParser( socket.getInputStream(), len );
 					String parameter = parser.getParameter();
 					while( parameter != null )
 					{
@@ -136,7 +142,7 @@ public class Server
 				}
 			}
 
-			OutputStream out = handler.getOutputStream();
+			OutputStream out = socket.getOutputStream();
 			out = new CloseBlockingOutputStream( out );
 			Response response = new Response( request, out );
 			RequestContext context = new RequestContext( request, response, getApplication() );
@@ -184,11 +190,11 @@ public class Server
 				{
 					String transfer = response.getHeader( "Transfer-Encoding" );
 					if( !"chunked".equals( transfer ) )
-						handler.close();
+						socket.close();
 				}
 
 				if( request.isConnectionClose() )
-					handler.close();
+					socket.close();
 			}
 			else
 			{

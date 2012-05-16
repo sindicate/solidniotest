@@ -7,9 +7,8 @@ import solidstack.httpclient.Request;
 import solidstack.httpclient.Response;
 import solidstack.httpclient.ResponseProcessor;
 import solidstack.httpclient.nio.Client;
-import solidstack.io.FatalIOException;
-import solidstack.nio.SocketMachine;
 import solidstack.nio.Loggers;
+import solidstack.nio.SocketMachine;
 
 public class Runner
 {
@@ -32,6 +31,7 @@ public class Runner
 		this.dispatcher = dispatcher;
 //		this.client = new Client( "192.168.0.105", 8001, dispatcher );
 		this.client = new Client( "localhost", 8001, dispatcher );
+		this.client.setMaxConnections( 300 );
 		this.request = new Request( "/" );
 //		this.request.setHeader( "Host", "www.nu.nl" );
 	}
@@ -65,8 +65,9 @@ public class Runner
 							}
 						} );
 					}
-					catch( FatalIOException e )
+					catch( RuntimeException e )
 					{
+						// TODO TooManyConnectionsException should that be failed or discarded?
 						Runner.this.failed ++;
 						Loggers.nio.debug( "", e );
 					}

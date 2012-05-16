@@ -28,6 +28,7 @@ public class Client
 	private String hostname;
 	private int port;
 	SocketPool pool;
+	private int maxConnections = 100;
 //	int sockets;
 
 	// TODO Maximum number of connections
@@ -42,6 +43,11 @@ public class Client
 		machine.registerSocketPool( this.pool ); // TODO Need Client.close() which removes this pool from the dispatcher
 	}
 
+	public void setMaxConnections( int maxConnections )
+	{
+		this.maxConnections = maxConnections;
+	}
+
 	public int[] getSocketCount()
 	{
 		return this.pool.getSocketCount();
@@ -52,9 +58,18 @@ public class Client
 		Socket socket = this.pool.getSocket();
 		if( socket == null )
 		{
-			socket = this.machine.connect( this.hostname, this.port );
-			this.pool.addSocket( socket );
-			socket.setPool( this.pool );
+			// TODO Maybe the pool should make the connections
+			// TODO Maybe we need a queue and the pool executes the queue when a connection is released
+			if( this.pool.total() >= this.maxConnections )
+			{
+//				throw new TooManyConnectionsException();
+				socket = this.pool.waitForSocket();
+			}
+			else
+			{
+				socket = this.machine.connect( this.hostname, this.port );
+				this.pool.addSocket( socket );
+			}
 		}
 
 		socket.doubleAcquire(); // Need 2 releases: this request and the received response

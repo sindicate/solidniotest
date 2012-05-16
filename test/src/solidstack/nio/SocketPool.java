@@ -5,6 +5,7 @@ import java.util.LinkedList;
 import java.util.List;
 
 import solidstack.lang.Assert;
+import solidstack.lang.ThreadInterrupted;
 
 
 // TODO Maximum size
@@ -28,11 +29,13 @@ public class SocketPool
 	{
 		Assert.isTrue( this.all.contains( handler ) );
 		this.pool.add( handler );
+		notify();
 	}
 
-	synchronized public void addSocket( Socket handler )
+	synchronized public void addSocket( Socket socket )
 	{
-		this.all.add( handler );
+		this.all.add( socket );
+		socket.setPool( this );
 //		this.allall.add( handler );
 	}
 
@@ -87,5 +90,24 @@ public class SocketPool
 				i.remove();
 			}
 		}
+	}
+
+	synchronized public Socket waitForSocket()
+	{
+		Socket result;
+		do
+		{
+			try
+			{
+				wait();
+			}
+			catch( InterruptedException e )
+			{
+				throw new ThreadInterrupted();
+			}
+			result = getSocket();
+		}
+		while( result == null );
+		return result;
 	}
 }

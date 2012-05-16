@@ -17,10 +17,10 @@ public class BackEndServer
 		System.setProperty( "logback.configurationFile", "solidstack/nio/test/logback-backend.xml" );
 
 		SocketMachine machine = new SocketMachine();
-		machine.setMaxConnections( 500 );
 
 		Server server = new Server( machine, 8001 );
 		server.setApplication( new BackEndServerApplication() );
+		server.setMaxConnections( 500 );
 
 		DatabaseWriter writer1 = new DatabaseWriter( machine );
 		DatabaseWriter writer2 = new DatabaseWriter( machine );

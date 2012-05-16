@@ -20,6 +20,7 @@ public class BackEndRootServlet implements Servlet
 				ResponseWriter writer = context.getResponse().getWriter();
 				writer.write( "Hello World!\n" );
 				context.getResponse().finish();
+				// FIXME Need to release the socket
 			}
 		} );
 
