@@ -13,9 +13,10 @@ import solidstack.nio.SocketMachine;
 public class Runner
 {
 	private int counter;
-	private SocketMachine dispatcher;
+	private SocketMachine machine;
 	Client client;
 	Request request;
+	Runnable runnable;
 	private ThreadPoolExecutor executor = (ThreadPoolExecutor)Executors.newCachedThreadPool();
 
 	private int started;
@@ -26,14 +27,15 @@ public class Runner
 
 	private long last = System.currentTimeMillis();
 
-	public Runner( SocketMachine dispatcher )
+	public Runner( SocketMachine machine )
 	{
-		this.dispatcher = dispatcher;
+		this.machine = machine;
 //		this.client = new Client( "192.168.0.105", 8001, dispatcher );
-		this.client = new Client( "localhost", 8001, dispatcher );
+		this.client = new Client( "localhost", 8001, machine );
 		this.client.setMaxConnections( 300 );
 		this.request = new Request( "/" );
 //		this.request.setHeader( "Host", "www.nu.nl" );
+		this.runnable = new MyRunnable();
 	}
 
 	public void trigger()
@@ -42,38 +44,7 @@ public class Runner
 
 		if( this.executor.getActiveCount() < 100 )
 		{
-			this.executor.execute( new Runnable()
-			{
-				@Override
-				public void run()
-				{
-					try
-					{
-						Runner.this.client.request( Runner.this.request, new ResponseProcessor()
-						{
-							public void timeout()
-							{
-								Runner.this.timedOut ++;
-							}
-
-							public void process( Response response )
-							{
-								if( response.getStatus() == 200 )
-									Runner.this.completed ++;
-								else
-									Runner.this.failed ++;
-							}
-						} );
-					}
-					catch( RuntimeException e )
-					{
-						// TODO TooManyConnectionsException should that be failed or discarded?
-						Runner.this.failed ++;
-						Loggers.nio.debug( "", e );
-					}
-				}
-			} );
-
+			this.executor.execute( this.runnable );
 			this.started ++;
 		}
 		else
@@ -86,6 +57,38 @@ public class Runner
 
 			int[] sockets = this.client.getSocketCount();
 			Loggers.nio.debug( "Complete: " + this.completed + ", failed: " + this.failed + ", discarded: " + this.discarded + ", timeout: " + this.timedOut + ", sockets: " + sockets[ 0 ] + ", pooled: " + sockets[ 1 ] );
+		}
+	}
+
+	public class MyRunnable implements Runnable
+	{
+		@Override
+		public void run()
+		{
+			try
+			{
+				Runner.this.client.request( Runner.this.request, new ResponseProcessor()
+				{
+					public void timeout()
+					{
+						Runner.this.timedOut ++;
+					}
+
+					public void process( Response response )
+					{
+						if( response.getStatus() == 200 )
+							Runner.this.completed ++;
+						else
+							Runner.this.failed ++;
+					}
+				} );
+			}
+			catch( RuntimeException e )
+			{
+				// TODO TooManyConnectionsException should that be failed or discarded?
+				Runner.this.failed ++;
+				Loggers.nio.debug( "", e );
+			}
 		}
 	}
 }
