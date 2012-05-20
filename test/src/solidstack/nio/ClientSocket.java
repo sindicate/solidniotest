@@ -9,7 +9,7 @@ public class ClientSocket
 	private String hostname;
 	private int port;
 
-	private int maxConnections;
+	private int maxConnections = 100;
 	private SocketPool pool = new SocketPool();
 
 
