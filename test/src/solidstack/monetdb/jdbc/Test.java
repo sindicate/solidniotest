@@ -18,7 +18,7 @@ public class Test
 	{
 		Socket socket = new Socket( "localhost", 50000 );
 		BlockInputStream in = new BlockInputStream( socket.getInputStream() );
-		BlockOutputStream out = new BlockOutputStream( socket.getOutputStream() );
+		final BlockOutputStream out = new BlockOutputStream( socket.getOutputStream() );
 
 //		SocketMachine machine = new SocketMachine();
 //		machine.start();
@@ -39,8 +39,8 @@ public class Test
 
 		out.writeBlock( "Xauto_commit 0" );
 		in.readBlock();
-//		out.writeBlock( "Xreply_size 2" ); // Xexport %s %s %s ?
-//		in.readBlock();
+		out.writeBlock( "Xreply_size 10000" ); // Xexport %s %s %s ?
+		in.readBlock();
 		out.writeBlock( "sprepare select * from tables where name = ?;" );
 		in.readBlock();
 		out.writeBlock( "sexec 0 ('sequences');" );
@@ -51,12 +51,40 @@ public class Test
 		in.readBlock();
 //		out.writeBlock( "screate table test ( test varchar(1000) );" );
 //		in.readBlock();
-		out.writeBlock( "sprepare insert into test values ( ? );" );
+		out.writeBlock( "sdelete from test;" );
 		in.readBlock();
+//		out.writeBlock( "sprepare insert into test values ( ? );" );
+//		in.readBlock();
+		Thread thread = new Thread()
+		{
+			@Override
+			public void run()
+			{
+				for( int i = 0; i < 1000; i++ )
+				{
+//					System.out.println( "-->" + i );
+//					out.writeBlock( "sexec 2 ( 'test' );" );
+					out.writeBlock( "sinsert into test values ( 'test' );" );
+				}
+			}
+		};
+		thread.start();
+		for( int i = 0; i < 1000; i++ )
+		{
+//			System.out.println( "<--" + i );
+			in.readBlock();
+		}
+//		thread.join();
 		out.writeBlock( "sexec 0 ( 'test' );" );
 		in.readBlock();
 		out.writeBlock( "scommit;" );
 		in.readBlock();
+		out.writeBlock( "sselect * from test;" );
+		in.readBlocks();
+		out.writeBlock( "Xexport 3 500 100" );
+		in.readBlocks();
+		out.writeBlock( "Xexport 3 200 1000" );
+		in.readBlocks();
 
 //		machine.shutdown();
 	}

@@ -8,12 +8,14 @@ import solidstack.io.FatalIOException;
 public class BlockInputStream
 {
 	private InputStream in;
+	private boolean last;
 
 	public BlockInputStream( InputStream in )
 	{
 		this.in = in;
 	}
 
+	// TODO We need UTF-8
 	public String readBlock()
 	{
 		try
@@ -21,7 +23,8 @@ public class BlockInputStream
 			int b1 = this.in.read();
 			int b2 = this.in.read();
 			int len = ( b1 | b2 << 8 ) >> 1;
-			System.out.println( len );
+			this.last = ( b1 & 1 ) != 0 || len < 8190; // TODO This is not right
+			System.out.println( "<--" + len );
 			byte[] block = new byte[ len ];
 			int read = this.in.read( block );
 			if( read < len )
@@ -42,5 +45,20 @@ public class BlockInputStream
 		{
 			throw new FatalIOException( e );
 		}
+	}
+
+	public String readBlocks()
+	{
+		String result = readBlock();
+		if( this.last )
+			return result;
+		StringBuilder builder = new StringBuilder( result );
+		do
+		{
+			String s = readBlock();
+			builder.append( s );
+		}
+		while( !this.last );
+		return builder.toString();
 	}
 }

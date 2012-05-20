@@ -9,6 +9,7 @@ public class BlockOutputStream
 {
 	private OutputStream out;
 
+	// TODO We need UTF-8
 	public BlockOutputStream( OutputStream out )
 	{
 		this.out = out;
@@ -17,7 +18,7 @@ public class BlockOutputStream
 	public void writeBlock( String s )
 	{
 		int len = ( s.length() << 1 ) + 1;
-		System.out.println( len );
+		System.out.println( "-->" + len );
 		System.out.println( s );
 		try
 		{
