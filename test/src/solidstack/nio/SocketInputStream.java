@@ -60,6 +60,14 @@ public class SocketInputStream extends InputStream
 		return this.buffer.remaining();
 	}
 
+	public boolean endOfFile() throws IOException
+	{
+		if( this.buffer.hasRemaining() )
+			return false;
+		readChannel();
+		return !this.buffer.hasRemaining();
+	}
+
 	// TODO Implement close()?
 
 	static protected void logBuffer( int id, ByteBuffer buffer )

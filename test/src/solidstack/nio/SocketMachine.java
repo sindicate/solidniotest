@@ -1,6 +1,7 @@
 package solidstack.nio;
 
 import java.io.IOException;
+import java.net.ConnectException;
 import java.net.InetSocketAddress;
 import java.nio.channels.CancelledKeyException;
 import java.nio.channels.SelectionKey;
@@ -173,7 +174,7 @@ public class SocketMachine extends Thread
 		}
 	}
 
-	public Socket connect( String hostname, int port )
+	public Socket connect( String hostname, int port ) throws ConnectException
 	{
 		Socket socket = new Socket( false, this );
 		connect( hostname, port, socket );
@@ -181,11 +182,23 @@ public class SocketMachine extends Thread
 		return socket;
 	}
 
-	private void connect( String hostname, int port, Socket socket )
+	private void connect( String hostname, int port, Socket socket ) throws ConnectException
 	{
+		SocketChannel channel;
 		try
 		{
-			SocketChannel channel = SocketChannel.open( new InetSocketAddress( hostname, port ) );
+			channel = SocketChannel.open( new InetSocketAddress( hostname, port ) );
+		}
+		catch( ConnectException e )
+		{
+			throw e;
+		}
+		catch( IOException e )
+		{
+			throw new FatalIOException( e );
+		}
+		try
+		{
 			channel.configureBlocking( false );
 			SelectionKey key;
 			synchronized( this.lock ) // Prevent register from blocking again

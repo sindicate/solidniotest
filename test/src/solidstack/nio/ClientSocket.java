@@ -1,5 +1,7 @@
 package solidstack.nio;
 
+import java.net.ConnectException;
+
 
 
 public class ClientSocket
@@ -32,7 +34,7 @@ public class ClientSocket
 		return this.pool.getSocketCount();
 	}
 
-	public Socket getSocket()
+	public Socket getSocket() throws ConnectException
 	{
 		Socket socket = this.pool.getSocket();
 		if( socket == null )

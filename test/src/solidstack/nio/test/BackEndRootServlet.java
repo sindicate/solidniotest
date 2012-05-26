@@ -3,6 +3,7 @@ package solidstack.nio.test;
 import solidstack.httpserver.RequestContext;
 import solidstack.httpserver.ResponseWriter;
 import solidstack.httpserver.Servlet;
+import solidstack.nio.Loggers;
 
 
 public class BackEndRootServlet implements Servlet
@@ -16,11 +17,18 @@ public class BackEndRootServlet implements Servlet
 			@Override
 			public void run()
 			{
-				context.getResponse().setContentType( "text/html", null );
-				ResponseWriter writer = context.getResponse().getWriter();
-				writer.write( "Hello World!\n" );
-				context.getResponse().finish();
-				// FIXME Need to release the socket
+				try
+				{
+					context.getResponse().setContentType( "text/html", null );
+					ResponseWriter writer = context.getResponse().getWriter();
+					writer.write( "Hello World!\n" );
+					context.getResponse().finish();
+					// FIXME Need to release the socket
+				}
+				catch( Exception e )
+				{
+					Loggers.nio.debug( "BackEnd Unhandled exception", e );
+				}
 			}
 		} );
 

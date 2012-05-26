@@ -27,10 +27,12 @@ public class DatabaseWriter extends Thread
 		try
 		{
 //			Connection connection = DriverManager.getConnection( "jdbc:derby:sample;create=true", "", "" );
-			Connection connection = DriverManager.getConnection( "jdbc:hsqldb:file:hsample", "", "" );
+//			Connection connection = DriverManager.getConnection( "jdbc:hsqldb:file:hsample", "", "" );
+//			Class.forName( "oracle.jdbc.OracleDriver" );
+			Connection connection = DriverManager.getConnection( "jdbc:oracle:thin:@192.168.0.109:1521:XE", "RENE", "RENE" );
 			try
 			{
-				connection.createStatement().executeUpdate( "CREATE TABLE TEST ( TEXT VARCHAR( 1000 ) )" );
+				connection.createStatement().executeUpdate( "CREATE TABLE TEST ( TEXT VARCHAR2( 1000 ) )" );
 			}
 			catch( SQLException e )
 			{
@@ -41,6 +43,10 @@ public class DatabaseWriter extends Thread
 		{
 			throw new SystemException( e );
 		}
+//		catch( ClassNotFoundException e )
+//		{
+//			throw new SystemException( e );
+//		}
 	}
 
 	public DatabaseWriter( SocketMachine dispatcher )
@@ -50,7 +56,8 @@ public class DatabaseWriter extends Thread
 
 		try
 		{
-			this.connection = DriverManager.getConnection( "jdbc:hsqldb:file:hsample", "", "" );
+			this.connection = DriverManager.getConnection( "jdbc:oracle:thin:@192.168.0.109:1521:XE", "RENE", "RENE" );
+//			this.connection = DriverManager.getConnection( "jdbc:hsqldb:file:hsample", "", "" );
 			this.connection.setAutoCommit( false );
 			this.insert = this.connection.prepareStatement( "INSERT INTO TEST ( TEXT ) VALUES ( ? )" );
 		}

@@ -3,6 +3,7 @@ package solidstack.nio.test;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.ConnectException;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -13,6 +14,7 @@ import solidstack.httpclient.ResponseProcessor;
 import solidstack.httpclient.nio.Client;
 import solidstack.httpserver.RequestContext;
 import solidstack.httpserver.Servlet;
+import solidstack.io.FatalIOException;
 import solidstack.lang.Assert;
 import solidstack.lang.SystemException;
 import solidstack.lang.ThreadInterrupted;
@@ -134,6 +136,13 @@ public class MiddleRootServlet implements Servlet
 
 		Request request = new Request( "/" + ( sleep != null ? "?sleep=" + sleep : "" ) );
 
-		this.client.request( request, processor );
+		try
+		{
+			this.client.request( request, processor );
+		}
+		catch( ConnectException e )
+		{
+			throw new FatalIOException( e );
+		}
 	}
 }

@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.PrintStream;
+import java.net.ConnectException;
 import java.util.List;
 import java.util.Map;
 
@@ -46,7 +47,7 @@ public class Client
 		return this.socket.getSocketCount();
 	}
 
-	public void request( Request request, final ResponseProcessor processor )
+	public void request( Request request, final ResponseProcessor processor ) throws ConnectException
 	{
 		Socket socket = this.socket.getSocket();
 

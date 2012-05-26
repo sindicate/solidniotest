@@ -1,5 +1,6 @@
 package solidstack.nio.test;
 
+import java.net.ConnectException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadPoolExecutor;
 
@@ -88,6 +89,11 @@ public class Runner
 				// TODO TooManyConnectionsException should that be failed or discarded?
 				Runner.this.failed ++;
 				Loggers.nio.debug( "", e );
+			}
+			catch( ConnectException e )
+			{
+				Runner.this.failed ++;
+				Loggers.nio.debug( e.getMessage() );
 			}
 		}
 	}

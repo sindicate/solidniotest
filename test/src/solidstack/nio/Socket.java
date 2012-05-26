@@ -6,6 +6,7 @@ import java.nio.channels.SocketChannel;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import solidstack.httpserver.FatalSocketException;
 import solidstack.io.FatalIOException;
 import solidstack.lang.Assert;
 
@@ -224,9 +225,22 @@ public class Socket implements Runnable
 		boolean complete = false;
 		try
 		{
+			try
+			{
+				if( this.in.endOfFile() )
+				{
+					Loggers.nio.debug( "Connection closed" );
+					return;
+				}
+			}
+			catch( FatalSocketException e )
+			{
+				Loggers.nio.debug( "Connection forcibly closed" );
+				return;
+			}
+
 			Loggers.nio.trace( "Channel ({}) Task started", getDebugId() );
 
-			SelectionKey key = getKey();
 			while( true )
 			{
 				getReader().incoming( this );
