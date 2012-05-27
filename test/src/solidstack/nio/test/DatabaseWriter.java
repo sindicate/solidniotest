@@ -4,6 +4,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
@@ -30,13 +31,22 @@ public class DatabaseWriter extends Thread
 //			Connection connection = DriverManager.getConnection( "jdbc:hsqldb:file:hsample", "", "" );
 //			Class.forName( "oracle.jdbc.OracleDriver" );
 			Connection connection = DriverManager.getConnection( "jdbc:oracle:thin:@192.168.0.109:1521:XE", "RENE", "RENE" );
+			Statement statement = connection.createStatement();
 			try
 			{
-				connection.createStatement().executeUpdate( "CREATE TABLE TEST ( TEXT VARCHAR2( 1000 ) )" );
+				statement.executeUpdate( "DROP TABLE TEST" );
 			}
 			catch( SQLException e )
 			{
-				// ignore
+				Loggers.nio.debug( e.getMessage() );
+			}
+			try
+			{
+				statement.executeUpdate( "CREATE TABLE TEST ( TEXT VARCHAR2( 1000 ) )" );
+			}
+			catch( SQLException e )
+			{
+				Loggers.nio.debug( e.getMessage() );
 			}
 		}
 		catch( SQLException e )

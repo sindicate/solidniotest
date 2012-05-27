@@ -46,7 +46,9 @@ public class RampGenerator
 
 		int rate = 1;
 
-		long rampStartMillis = System.currentTimeMillis();
+		long now = System.currentTimeMillis();
+
+		long rampStartMillis = now;
 		int rampBaseRate = rate;
 		int rampDelta = this.goal - rampBaseRate;
 
@@ -56,9 +58,12 @@ public class RampGenerator
 		int sleep = 1000 / rate;
 		if( sleep < 10 ) sleep = 10;
 
+		long stats = 0;
+//		int triggeredTotal = 0; // TODO Or long?
+
 		while( true )
 		{
-			long now = System.currentTimeMillis();
+			now = System.currentTimeMillis();
 
 			// Listen to the keyboard
 			try
@@ -76,13 +81,20 @@ public class RampGenerator
 					}
 					else if( ch == 'b' )
 					{
-						if( this.goal <= 100 )
-							this.goal = 1;
-						else
-							this.goal -= 100;
+						this.goal -= 100;
+						if( this.goal < 0 )
+							this.goal = 0;
 						rampStartMillis = now; // restart the ramp up
 						rampBaseRate = rate;
 						rampDelta = this.goal - rate;
+						Loggers.nio.debug( "Goal: {}", this.goal );
+					}
+					else if( ch == 'x' )
+					{
+						this.goal = 0;
+						rampStartMillis = now - this.rampPeriod; // stop the ramp up
+//						rampBaseRate = rate;
+//						rampDelta = this.goal - rate;
 						Loggers.nio.debug( "Goal: {}", this.goal );
 					}
 				}
@@ -96,37 +108,52 @@ public class RampGenerator
 			long running = now - rampStartMillis;
 			int oldRate = rate;
 			if( running < this.rampPeriod )
-			{
 				rate = rampBaseRate + (int)( rampDelta * running / this.rampPeriod );
-				sleep = 1000 / rate;
-				if( sleep < 10 ) sleep = 10;
-			}
 			else
 				rate = this.goal;
 			if( rate != oldRate )
-				Loggers.nio.debug( "Rate: {}", rate );
+			{
+				if( rate == 0 )
+					sleep = 1000;
+				else
+				{
+					sleep = 1000 / rate;
+					if( sleep < 10 ) sleep = 10;
+				}
+			}
 
 			// Determine how many to trigger
 			int need = (int)( ( now - triggerStartMillis ) * rate / 1000 );
 			int diff = need - triggerCount;
 
-			for( int i = 0; i < diff; i++ )
-				this.runner.trigger();
-
-			triggerCount += diff;
-			if( triggerCount >= 100000 )
+			if( diff > 0 )
 			{
-				triggerStartMillis = now;
-				triggerCount = 0;
+				// Trigger
+				for( int i = 0; i < diff; i++ )
+					this.runner.trigger();
+//				triggeredTotal += diff;
+
+				// Adjust
+				// TODO Use ten second sliding average
+				triggerCount += diff;
+				if( triggerCount >= 100000 )
+				{
+					triggerStartMillis = now;
+					triggerCount = 0;
+				}
 			}
 
+			// Sleep
 			sleep( sleep );
 
-//			if( now - last >= 1000 )
-//			{
-//				last += 1000;
-//				System.out.println( "Rate: " + rate );
-//			}
+			// Stats
+			if( now - stats >= 1000 )
+			{
+				stats += 1000;
+				if( now - stats >= 1000 )
+					stats = now + 1000;
+				this.runner.stats( rate );
+			}
 		}
 	}
 }

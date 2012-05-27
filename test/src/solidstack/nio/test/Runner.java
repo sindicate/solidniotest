@@ -20,7 +20,7 @@ public class Runner
 	Runnable runnable;
 	private ThreadPoolExecutor executor = (ThreadPoolExecutor)Executors.newCachedThreadPool();
 
-	private int started;
+	private int started; // TODO Or long
 	private int discarded;
 	int completed;
 	int timedOut;
@@ -33,7 +33,7 @@ public class Runner
 		this.machine = machine;
 //		this.client = new Client( "192.168.0.105", 8001, dispatcher );
 		this.client = new Client( "localhost", 8001, machine );
-		this.client.setMaxConnections( 300 );
+		this.client.setMaxConnections( 100 );
 		this.request = new Request( "/" );
 //		this.request.setHeader( "Host", "www.nu.nl" );
 		this.runnable = new MyRunnable();
@@ -56,9 +56,13 @@ public class Runner
 		{
 			this.last += 1000;
 
-			int[] sockets = this.client.getSocketCount();
-			Loggers.nio.debug( "Complete: " + this.completed + ", failed: " + this.failed + ", discarded: " + this.discarded + ", timeout: " + this.timedOut + ", sockets: " + sockets[ 0 ] + ", pooled: " + sockets[ 1 ] );
 		}
+	}
+
+	public void stats( int rate )
+	{
+		int[] sockets = this.client.getSocketCount();
+		Loggers.nio.debug( "Rate: " + rate + ", started: " + this.started + ", discarded: " + this.discarded + ", complete: " + this.completed + ", failed: " + this.failed + ", timeout: " + this.timedOut + ", sockets: " + sockets[ 0 ] + ", pooled: " + sockets[ 1 ] );
 	}
 
 	public class MyRunnable implements Runnable
