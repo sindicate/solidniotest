@@ -65,7 +65,7 @@ public class Client
 
 			this.machine.addTimeout( reader, socket, System.currentTimeMillis() + 10000 );
 
-			sendRequest( request, socket.getOutputStream() );
+			sendRequest( request, socket );
 
 			complete = true;
 		}
@@ -112,9 +112,11 @@ public class Client
 	static private final byte[] HTTP = " HTTP/1.1\r\n".getBytes();
 	static private final byte[] NEWLINE = "\r\n".getBytes();
 	static private final byte[] COLON = ": ".getBytes();
+//	static private final byte[] CHANNEL = "?channel=".getBytes();
 
-	private void sendRequest( Request request, OutputStream out )
+	private void sendRequest( Request request, Socket socket )
 	{
+		OutputStream out = socket.getOutputStream();
 		try
 		{
 			out.write( GET );
@@ -123,6 +125,8 @@ public class Client
 				out.write( path.getBytes() );
 			else
 				out.write( '/' );
+//			out.write( CHANNEL );
+//			out.write( Integer.toString( socket.getDebugId() ).getBytes() );
 			out.write( HTTP );
 			for( Map.Entry< String, List< String > > entry : request.getHeaders().entrySet() )
 				for( String value : entry.getValue() )

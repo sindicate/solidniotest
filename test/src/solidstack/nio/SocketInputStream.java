@@ -22,7 +22,7 @@ public class SocketInputStream extends InputStream
 	}
 
 	@Override
-	public int read() throws IOException
+	synchronized public int read() throws IOException
 	{
 		if( this.handler == null )
 			return -1;
@@ -37,7 +37,7 @@ public class SocketInputStream extends InputStream
 	}
 
 	@Override
-	public int read( byte[] b, int off, int len ) throws IOException
+	synchronized public int read( byte[] b, int off, int len ) throws IOException
 	{
 		if( this.handler == null )
 			return -1;
@@ -55,12 +55,12 @@ public class SocketInputStream extends InputStream
 	}
 
 	@Override
-	public int available() throws IOException
+	synchronized public int available() throws IOException
 	{
 		return this.buffer.remaining();
 	}
 
-	public boolean endOfFile() throws IOException
+	synchronized public boolean endOfFile() throws IOException
 	{
 		if( this.buffer.hasRemaining() )
 			return false;
@@ -70,14 +70,14 @@ public class SocketInputStream extends InputStream
 
 	// TODO Implement close()?
 
-	static protected void logBuffer( int id, ByteBuffer buffer )
+	static private void logBuffer( int id, ByteBuffer buffer )
 	{
 		byte[] bytes = buffer.array();
 		Loggers.nio.trace( "Channel (" + id + ") " + new String( bytes, 0, buffer.limit() ) );
 	}
 
 	// TODO What if it read too much? Like when 2 requests are chained. The handler needs to keep reading.
-	protected void readChannel()
+	private void readChannel()
 	{
 		SocketChannel channel = this.handler.getChannel();
 		int id = DebugId.getId( channel );

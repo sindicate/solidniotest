@@ -66,7 +66,7 @@ public class Socket implements Runnable
 		return this.reader;
 	}
 
-	int getDebugId()
+	public int getDebugId()
 	{
 		return this.debugId;
 	}

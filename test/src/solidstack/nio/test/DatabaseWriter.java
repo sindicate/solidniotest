@@ -20,8 +20,8 @@ public class DatabaseWriter extends Thread
 	private Connection connection;
 
 	private boolean stats;
-	static volatile private int written;
-	static volatile private int responses;
+	static private int written;
+	static private int responses;
 
 	// TODO AtomicReference is not really need at this time
 	static private List<Element> buffer = new LinkedList<Element>();
@@ -137,8 +137,6 @@ public class DatabaseWriter extends Thread
 					this.insert.executeBatch();
 					this.connection.commit();
 
-					DatabaseWriter.written += b.size();
-
 //					ResultSet result = connection.createStatement().executeQuery( "SELECT COUNT(*) FROM TEST" );
 //					result.next();
 //					System.out.println( result.getInt( 1 ) );
@@ -147,7 +145,11 @@ public class DatabaseWriter extends Thread
 					for( Element element : b )
 						this.dispatcher.execute( element.runnable );
 
-					DatabaseWriter.responses += b.size();
+					synchronized( DatabaseWriter.class )
+					{
+						DatabaseWriter.written += b.size();
+						DatabaseWriter.responses += b.size();
+					}
 				}
 
 				if( this.stats )

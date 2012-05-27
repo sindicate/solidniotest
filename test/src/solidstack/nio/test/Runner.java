@@ -32,9 +32,9 @@ public class Runner
 	public Runner( SocketMachine machine )
 	{
 		this.machine = machine;
-//		this.client = new Client( "192.168.0.105", 8001, dispatcher );
+//		this.client = new Client( "192.168.0.105", 8001, machine );
 		this.client = new Client( "localhost", 8001, machine );
-		this.client.setMaxConnections( 300 );
+		this.client.setMaxConnections( 500 );
 		this.request = new Request( "/" );
 //		this.request.setHeader( "Host", "www.nu.nl" );
 		this.runnable = new MyRunnable();

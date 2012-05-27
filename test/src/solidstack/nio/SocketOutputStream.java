@@ -25,7 +25,7 @@ public class SocketOutputStream extends OutputStream
 	}
 
 	@Override
-	public void write( int b )
+	synchronized public void write( int b )
 	{
 		if( !this.block.compareAndSet( null, Thread.currentThread() ) )
 			Assert.fail( "Channel (" + this.handler.getDebugId() + ") " + this.block.get().getName() );
@@ -39,8 +39,12 @@ public class SocketOutputStream extends OutputStream
 	}
 
 	@Override
-	public void write( byte[] b, int off, int len )
+	// TODO Can we do this synchronized differently?
+	synchronized public void write( byte[] b, int off, int len )
 	{
+		if( len == 0 )
+			return;
+
 		if( !this.block.compareAndSet( null, Thread.currentThread() ) )
 			Assert.fail( "Channel (" + this.handler.getDebugId() + ") " + this.block.get().getName() );
 
@@ -60,7 +64,7 @@ public class SocketOutputStream extends OutputStream
 	}
 
 	@Override
-	public void flush() throws IOException
+	synchronized public void flush() throws IOException
 	{
 		if( !this.block.compareAndSet( null, Thread.currentThread() ) )
 			Assert.fail( "Channel (" + this.handler.getDebugId() + ") " + this.block.get().getName() );
@@ -72,13 +76,13 @@ public class SocketOutputStream extends OutputStream
 	}
 
 	@Override
-	public void close() throws IOException
+	synchronized public void close() throws IOException
 	{
 		flush();
 		this.handler.close();
 	}
 
-	static protected void logBuffer( int id, ByteBuffer buffer )
+	static private void logBuffer( int id, ByteBuffer buffer )
 	{
 //		StringBuilder log = new StringBuilder();
 		byte[] bytes = buffer.array();
@@ -93,7 +97,7 @@ public class SocketOutputStream extends OutputStream
 		Loggers.nio.trace( "Channel (" + id + ") " + new String( bytes, 0, buffer.limit() ) );
 	}
 
-	protected void writeChannel()
+	private void writeChannel()
 	{
 		SocketChannel channel = this.handler.getChannel();
 		int id = DebugId.getId( channel );
