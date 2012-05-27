@@ -34,6 +34,9 @@ public class SocketMachine extends Thread
 	// TODO Build the timeouts on the keys?
 	private Map<ResponseReader, Timeout> timeouts = new LinkedHashMap<ResponseReader, Timeout>(); // TODO Use DelayQueue or other form of concurrent datastructure
 	private long nextTimeout;
+	private int timeoutAdded;
+	private int timeoutRemoved;
+
 
 	private List<SocketPool> pools = new ArrayList<SocketPool>();
 
@@ -220,6 +223,7 @@ public class SocketMachine extends Thread
 		synchronized( this.timeouts )
 		{
 			this.timeouts.put( listener, new Timeout( listener, handler, when ) );
+			this.timeoutAdded ++;
 		}
 	}
 
@@ -228,7 +232,13 @@ public class SocketMachine extends Thread
 		synchronized( this.timeouts )
 		{
 			this.timeouts.remove( listener );
+			this.timeoutRemoved ++;
 		}
+	}
+
+	public int[] getTimeouts()
+	{
+		return new int[] { this.timeoutAdded, this.timeoutRemoved };
 	}
 
 	public void registerSocketPool( SocketPool pool )

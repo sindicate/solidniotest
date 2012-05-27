@@ -22,10 +22,10 @@ public class BackEndServer
 		server.setApplication( new BackEndServerApplication() );
 		server.setMaxConnections( 500 );
 
-		DatabaseWriter writer1 = new DatabaseWriter( machine );
-		DatabaseWriter writer2 = new DatabaseWriter( machine );
-		DatabaseWriter writer3 = new DatabaseWriter( machine );
-		DatabaseWriter writer4 = new DatabaseWriter( machine );
+		DatabaseWriter writer1 = new DatabaseWriter( machine, true );
+		DatabaseWriter writer2 = new DatabaseWriter( machine, false );
+		DatabaseWriter writer3 = new DatabaseWriter( machine, false );
+		DatabaseWriter writer4 = new DatabaseWriter( machine, false );
 
 		writer1.start();
 		writer2.start();

@@ -82,16 +82,17 @@ public class SocketPool
 		long now = System.currentTimeMillis();
 		for( Iterator<Socket> i = this.pool.iterator(); i.hasNext(); )
 		{
-			Socket handler = i.next();
-			if( handler.lastPooled() + 60000 <= now )
+			Socket socket = i.next();
+			if( socket.lastPooled() + 60000 <= now )
 			{
-				Assert.isTrue( this.all.remove( handler ) );
-				handler.poolTimeout();
+				Assert.isTrue( this.all.remove( socket ) );
+				socket.poolTimeout();
 				i.remove();
 			}
 		}
 	}
 
+	// TODO This is bad, caller is not synchronized. You get more waiters than there are sockets in the pool
 	synchronized public Socket waitForSocket()
 	{
 		Socket result;

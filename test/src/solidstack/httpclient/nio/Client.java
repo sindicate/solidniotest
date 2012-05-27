@@ -47,6 +47,11 @@ public class Client
 		return this.socket.getSocketCount();
 	}
 
+	public int[] getTimeouts()
+	{
+		return this.machine.getTimeouts();
+	}
+
 	public void request( Request request, final ResponseProcessor processor ) throws ConnectException
 	{
 		Socket socket = this.socket.getSocket();
@@ -98,11 +103,8 @@ public class Client
 
 		public void timeout( Socket handler ) throws IOException
 		{
-			if( this.processor != null )
-			{
-				this.processor.timeout();
-				handler.timeout();
-			}
+			this.processor.timeout();
+			handler.timeout();
 		}
 	}
 

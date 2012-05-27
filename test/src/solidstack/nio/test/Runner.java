@@ -10,6 +10,7 @@ import solidstack.httpclient.ResponseProcessor;
 import solidstack.httpclient.nio.Client;
 import solidstack.nio.Loggers;
 import solidstack.nio.SocketMachine;
+import solidstack.nio.TooManyConnectionsException;
 
 public class Runner
 {
@@ -33,7 +34,7 @@ public class Runner
 		this.machine = machine;
 //		this.client = new Client( "192.168.0.105", 8001, dispatcher );
 		this.client = new Client( "localhost", 8001, machine );
-		this.client.setMaxConnections( 100 );
+		this.client.setMaxConnections( 300 );
 		this.request = new Request( "/" );
 //		this.request.setHeader( "Host", "www.nu.nl" );
 		this.runnable = new MyRunnable();
@@ -46,23 +47,42 @@ public class Runner
 		if( this.executor.getActiveCount() < 100 )
 		{
 			this.executor.execute( this.runnable );
-			this.started ++;
+			started();
 		}
 		else
-			this.discarded ++;
-
-		long now = System.currentTimeMillis();
-		if( now - this.last >= 1000 )
-		{
-			this.last += 1000;
-
-		}
+			discarded();
 	}
 
 	public void stats( int rate )
 	{
 		int[] sockets = this.client.getSocketCount();
-		Loggers.nio.debug( "Rate: " + rate + ", started: " + this.started + ", discarded: " + this.discarded + ", complete: " + this.completed + ", failed: " + this.failed + ", timeout: " + this.timedOut + ", sockets: " + sockets[ 0 ] + ", pooled: " + sockets[ 1 ] );
+		int[] timeouts = this.client.getTimeouts();
+		Loggers.nio.debug( "Rate: " + rate + ", started: " + this.started + ", discarded: " + this.discarded + ", complete: " + this.completed + ", failed: " + this.failed + ", timeout: " + this.timedOut + ", sockets: " + sockets[ 0 ] + ", pooled: " + sockets[ 1 ] + ", to+: " + timeouts[ 0 ] + ", to-: " + timeouts[ 1 ] );
+	}
+
+	synchronized public void started()
+	{
+		this.started ++;
+	}
+
+	synchronized public void discarded()
+	{
+		this.discarded ++;
+	}
+
+	synchronized public void completed()
+	{
+		this.completed ++;
+	}
+
+	synchronized public void failed()
+	{
+		this.failed ++;
+	}
+
+	synchronized public void timedOut()
+	{
+		this.timedOut ++;
 	}
 
 	public class MyRunnable implements Runnable
@@ -76,28 +96,31 @@ public class Runner
 				{
 					public void timeout()
 					{
-						Runner.this.timedOut ++;
+						timedOut();
 					}
 
 					public void process( Response response )
 					{
 						if( response.getStatus() == 200 )
-							Runner.this.completed ++;
+							completed();
 						else
-							Runner.this.failed ++;
+							failed();
 					}
 				} );
 			}
-			catch( RuntimeException e )
-			{
-				// TODO TooManyConnectionsException should that be failed or discarded?
-				Runner.this.failed ++;
-				Loggers.nio.debug( "", e );
-			}
 			catch( ConnectException e )
 			{
-				Runner.this.failed ++;
+				failed();
 				Loggers.nio.debug( e.getMessage() );
+			}
+			catch( TooManyConnectionsException e )
+			{
+				failed();
+			}
+			catch( Exception e )
+			{
+				failed();
+				Loggers.nio.debug( "", e );
 			}
 		}
 	}

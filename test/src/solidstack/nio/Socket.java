@@ -178,6 +178,7 @@ public class Socket implements Runnable
 
 	void poolTimeout()
 	{
+		Loggers.nio.trace( "Channel ({}) PoolTimeout", getDebugId() );
 		close0();
 	}
 

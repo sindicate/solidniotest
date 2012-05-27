@@ -43,8 +43,8 @@ public class ClientSocket
 			// TODO Maybe we need a queue and the pool executes the queue when a connection is released
 			if( this.pool.total() >= this.maxConnections )
 			{
-//				throw new TooManyConnectionsException();
-				socket = this.pool.waitForSocket();
+				throw new TooManyConnectionsException();
+//				socket = this.pool.waitForSocket();
 			}
 			else
 			{

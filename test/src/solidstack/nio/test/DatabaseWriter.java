@@ -7,7 +7,6 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicReference;
 
 import solidstack.lang.SystemException;
 import solidstack.lang.ThreadInterrupted;
@@ -20,8 +19,13 @@ public class DatabaseWriter extends Thread
 	private PreparedStatement insert;
 	private Connection connection;
 
+	private boolean stats;
+	static volatile private int written;
+	static volatile private int responses;
+
 	// TODO AtomicReference is not really need at this time
-	static private AtomicReference<List<Element>> buffer = new AtomicReference<List<Element>>( new LinkedList<Element>() );
+	static private List<Element> buffer = new LinkedList<Element>();
+	static private Object bufferLock = new Object();
 
 	static
 	{
@@ -59,9 +63,10 @@ public class DatabaseWriter extends Thread
 //		}
 	}
 
-	public DatabaseWriter( SocketMachine dispatcher )
+	public DatabaseWriter( SocketMachine dispatcher, boolean stats )
 	{
 		this.dispatcher = dispatcher;
+		this.stats = stats;
 		setPriority( NORM_PRIORITY + 1 );
 
 		try
@@ -94,6 +99,7 @@ public class DatabaseWriter extends Thread
 	public void run()
 	{
 		// TODO Detect when this thread is down
+		long last = System.currentTimeMillis();
 		try
 		{
 //			long next = System.currentTimeMillis();
@@ -108,12 +114,16 @@ public class DatabaseWriter extends Thread
 //				}
 //				next = now + 1000;
 
-				List<Element> b;
-				synchronized( buffer )
+				List<Element> b = null;
+				synchronized( bufferLock )
 				{
-					b = buffer.getAndSet( new LinkedList<Element>() );
+					if( !buffer.isEmpty() )
+					{
+						b = buffer;
+						buffer = new LinkedList<Element>();
+					}
 				}
-				if( b.isEmpty() )
+				if( b == null )
 					sleep0( 100 );
 				else
 				{
@@ -122,10 +132,12 @@ public class DatabaseWriter extends Thread
 						this.insert.setString( 1, element.string );
 						this.insert.addBatch();
 					}
-					Loggers.nio.debug( "Inserted {} records", b.size() );
+//					Loggers.nio.debug( "Inserted {} records", b.size() );
 					// TODO execute batch when growing too big
 					this.insert.executeBatch();
 					this.connection.commit();
+
+					DatabaseWriter.written += b.size();
 
 //					ResultSet result = connection.createStatement().executeQuery( "SELECT COUNT(*) FROM TEST" );
 //					result.next();
@@ -134,6 +146,18 @@ public class DatabaseWriter extends Thread
 					// TODO Start a lot of tasks in one burst
 					for( Element element : b )
 						this.dispatcher.execute( element.runnable );
+
+					DatabaseWriter.responses += b.size();
+				}
+
+				if( this.stats )
+				{
+					long now = System.currentTimeMillis();
+					if( now - last >= 1000 )
+					{
+						last = now;
+						Loggers.nio.debug( "Written: " + DatabaseWriter.written + ", responses: " + DatabaseWriter.responses );
+					}
 				}
 			}
 		}
@@ -145,9 +169,9 @@ public class DatabaseWriter extends Thread
 
 	static public void write( String string, Runnable runnable )
 	{
-		synchronized( buffer )
+		synchronized( bufferLock )
 		{
-			buffer.get().add( new Element( string, runnable ) );
+			buffer.add( new Element( string, runnable ) );
 		}
 	}
 
