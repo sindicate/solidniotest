@@ -34,7 +34,7 @@ public class Runner
 		this.machine = machine;
 //		this.client = new Client( "192.168.0.105", 8001, machine );
 		this.client = new Client( "localhost", 8001, machine );
-		this.client.setMaxConnections( 500 );
+		this.client.setMaxConnections( 400 );
 		this.request = new Request( "/" );
 //		this.request.setHeader( "Host", "www.nu.nl" );
 		this.runnable = new MyRunnable();
@@ -44,7 +44,7 @@ public class Runner
 	{
 //		System.out.println( "triggered " + this.counter++ );
 
-		if( this.executor.getActiveCount() < 100 )
+		if( this.executor.getActiveCount() < 200 )
 		{
 			this.executor.execute( this.runnable );
 			started();
@@ -55,9 +55,9 @@ public class Runner
 
 	public void stats( int rate )
 	{
-		int[] sockets = this.client.getSocketCount();
+		int[] sockets = this.client.getCounts();
 		int[] timeouts = this.client.getTimeouts();
-		Loggers.nio.debug( "Rate: " + rate + ", started: " + this.started + ", discarded: " + this.discarded + ", complete: " + this.completed + ", failed: " + this.failed + ", timeout: " + this.timedOut + ", sockets: " + sockets[ 0 ] + ", pooled: " + sockets[ 1 ] + ", to+: " + timeouts[ 0 ] + ", to-: " + timeouts[ 1 ] );
+		Loggers.nio.debug( "Rate: " + rate + ", started: " + this.started + ", discarded: " + this.discarded + ", complete: " + this.completed + ", failed: " + this.failed + ", timeout: " + this.timedOut + ", sockets: " + sockets[ 0 ] + ", pooled: " + sockets[ 1 ] + ", queued: " + sockets[ 2 ] );
 	}
 
 	synchronized public void started()

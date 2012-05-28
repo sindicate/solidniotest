@@ -1,6 +1,8 @@
 package solidstack.nio;
 
 import java.nio.channels.SelectionKey;
+import java.util.LinkedList;
+import java.util.List;
 
 
 public class ServerSocket
@@ -9,7 +11,8 @@ public class ServerSocket
 	private SelectionKey key;
 
 	private int maxConnections;
-	private SocketPool pool = new SocketPool();
+	private List<Socket> all = new LinkedList<Socket>();
+
 	private ResponseReader reader;
 
 	private int debugId;
@@ -42,18 +45,26 @@ public class ServerSocket
 		this.maxConnections = maxConnections;
 	}
 
+	// TODO Do we need synchronized?
 	public boolean canAccept()
 	{
-		return this.pool.total() < this.maxConnections;
+		return this.all.size() < this.maxConnections;
 	}
 
 	public void addSocket( Socket socket )
 	{
-		this.pool.addSocket( socket );
+		this.all.add( socket );
+		socket.setServerSocket( this );
 	}
 
 	int getDebugId()
 	{
 		return this.debugId;
+	}
+
+	public void channelClosed( Socket socket )
+	{
+//		Assert.isTrue( this.all.remove( socket ) ); TODO Enable
+		this.all.remove( socket );
 	}
 }

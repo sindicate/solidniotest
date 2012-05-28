@@ -37,8 +37,8 @@ public class SocketMachine extends Thread
 	private int timeoutAdded;
 	private int timeoutRemoved;
 
-
-	private List<SocketPool> pools = new ArrayList<SocketPool>();
+	private List<ClientSocket> clientSockets = new ArrayList<ClientSocket>();
+	// TODO Add the ServerSocket to process inactive sockets
 
 	private long nextLogging;
 
@@ -241,11 +241,11 @@ public class SocketMachine extends Thread
 		return new int[] { this.timeoutAdded, this.timeoutRemoved };
 	}
 
-	public void registerSocketPool( SocketPool pool )
+	public void registerClientSocket( ClientSocket socket )
 	{
-		synchronized( this.pools )
+		synchronized( this.clientSockets )
 		{
-			this.pools.add( pool );
+			this.clientSockets.add( socket );
 		}
 	}
 
@@ -437,8 +437,8 @@ public class SocketMachine extends Thread
 					for( Timeout timeout : timedouts )
 						timeout.getListener().timeout( timeout.getHandler() );
 
-					for( SocketPool pool : this.pools )
-						pool.timeout();
+					for( ClientSocket socket : this.clientSockets )
+						socket.timeout();
 
 //					// TODO This should not be needed
 //					Set<SelectionKey> keys2 = this.selector.keys();

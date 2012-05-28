@@ -18,6 +18,7 @@ import solidstack.httpserver.HttpHeaderTokenizer;
 import solidstack.httpserver.Token;
 import solidstack.io.FatalIOException;
 import solidstack.nio.ClientSocket;
+import solidstack.nio.RequestWriter;
 import solidstack.nio.ResponseReader;
 import solidstack.nio.Socket;
 import solidstack.nio.SocketMachine;
@@ -42,9 +43,9 @@ public class Client
 		this.socket.setMaxConnections( maxConnections );
 	}
 
-	public int[] getSocketCount()
+	public int[] getCounts()
 	{
-		return this.socket.getSocketCount();
+		return this.socket.getCounts();
 	}
 
 	public int[] getTimeouts()
@@ -52,30 +53,21 @@ public class Client
 		return this.machine.getTimeouts();
 	}
 
-	public void request( Request request, final ResponseProcessor processor ) throws ConnectException
+	public void request( final Request request, final ResponseProcessor processor ) throws ConnectException
 	{
-		Socket socket = this.socket.getSocket();
-
-		socket.doubleAcquire(); // Need 2 releases: this request and the received response
-		boolean complete = false;
-		try
+		this.socket.request( new RequestWriter()
 		{
-			MyResponseReader reader = new MyResponseReader( processor );
-			socket.setReader( reader );
+			@Override
+			public void write( Socket socket )
+			{
+				MyResponseReader reader = new MyResponseReader( processor );
+				socket.setReader( reader );
 
-			this.machine.addTimeout( reader, socket, System.currentTimeMillis() + 10000 );
+				Client.this.machine.addTimeout( reader, socket, System.currentTimeMillis() + 10000 );
 
-			sendRequest( request, socket );
-
-			complete = true;
-		}
-		finally
-		{
-			if( complete )
-				socket.release();
-			else
-				socket.close();
-		}
+				sendRequest( request, socket );
+			}
+		} );
 	}
 
 	// TODO Add to timeout manager
@@ -101,10 +93,10 @@ public class Client
 			Client.this.machine.removeTimeout( this );
 		}
 
-		public void timeout( Socket handler ) throws IOException
+		public void timeout( Socket socket ) throws IOException
 		{
 			this.processor.timeout();
-			handler.timeout();
+			socket.timeout();
 		}
 	}
 
@@ -114,7 +106,7 @@ public class Client
 	static private final byte[] COLON = ": ".getBytes();
 //	static private final byte[] CHANNEL = "?channel=".getBytes();
 
-	private void sendRequest( Request request, Socket socket )
+	void sendRequest( Request request, Socket socket )
 	{
 		OutputStream out = socket.getOutputStream();
 		try

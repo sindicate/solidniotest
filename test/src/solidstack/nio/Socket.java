@@ -24,7 +24,8 @@ public class Socket implements Runnable
 	private SocketInputStream in;
 	private SocketOutputStream out;
 
-	private SocketPool pool;
+	private ClientSocket clientSocket;
+	private ServerSocket serverSocket;
 	private long lastPooled;
 
 	private ResponseReader reader;
@@ -51,9 +52,14 @@ public class Socket implements Runnable
 		this.debugId = DebugId.getId( key.channel() );
 	}
 
-	public void setPool( SocketPool pool )
+	public void setClientSocket( ClientSocket clientSocket )
 	{
-		this.pool = pool;
+		this.clientSocket = clientSocket;
+	}
+
+	public void setServerSocket( ServerSocket serverSocket )
+	{
+		this.serverSocket = serverSocket;
 	}
 
 	public void setReader( ResponseReader reader )
@@ -165,15 +171,19 @@ public class Socket implements Runnable
 	public void close()
 	{
 		close0();
-		if( this.pool != null )
-			this.pool.channelClosed( this );
+		if( this.clientSocket != null )
+			this.clientSocket.channelClosed( this );
+		if( this.serverSocket != null )
+			this.serverSocket.channelClosed( this ); // TODO Ignore if the socket.close() is called twice
 	}
 
 	void lost()
 	{
 		close0();
-		if( this.pool != null )
-			this.pool.channelLost( this );
+		if( this.clientSocket != null )
+			this.clientSocket.channelLost( this );
+		if( this.serverSocket != null )
+			throw new UnsupportedOperationException();
 	}
 
 	void poolTimeout()
@@ -213,9 +223,9 @@ public class Socket implements Runnable
 
 	void returnToPool()
 	{
-		if( this.pool != null )
+		if( this.clientSocket != null )
 		{
-			this.pool.releaseSocket( this );
+			this.clientSocket.releaseSocket( this );
 			this.lastPooled = System.currentTimeMillis();
 		}
 		this.machine.listenRead( this.key ); // TODO The socket needs to be reading, otherwise client disconnects do not come through
