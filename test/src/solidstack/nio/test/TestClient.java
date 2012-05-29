@@ -20,6 +20,7 @@ public class TestClient
 		generator.setReceiver( runner );
 		generator.setGoal( 100 );
 //		generator.setRamp( 60 );
+		Thread.currentThread().setPriority( Thread.NORM_PRIORITY + 1 );
 		generator.run();
 	}
 

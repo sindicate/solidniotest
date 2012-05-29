@@ -53,6 +53,7 @@ public class RampGenerator
 		int rampDelta = this.goal - rampBaseRate;
 
 		long triggerStartMillis = rampStartMillis;
+		long lastStartMillis = triggerStartMillis;
 		int triggerCount = 0;
 
 		int sleep = 1000 / rate;
@@ -113,6 +114,8 @@ public class RampGenerator
 				rate = this.goal;
 			if( rate != oldRate )
 			{
+				triggerStartMillis = lastStartMillis;
+				triggerCount = 0;
 				if( rate == 0 )
 					sleep = 1000;
 				else
@@ -128,6 +131,8 @@ public class RampGenerator
 
 			if( diff > 0 )
 			{
+//				Loggers.nio.debug( "Triggering: {}, needed: {}, rate: {}", new Object[] { diff, need, rate } );
+
 				// Trigger
 				for( int i = 0; i < diff; i++ )
 					this.runner.trigger();
@@ -141,6 +146,7 @@ public class RampGenerator
 					triggerStartMillis = now;
 					triggerCount = 0;
 				}
+				lastStartMillis = now;
 			}
 
 			// Sleep
