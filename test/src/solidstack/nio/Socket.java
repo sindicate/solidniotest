@@ -243,13 +243,15 @@ public class Socket implements Runnable
 		return this.lastPooled;
 	}
 
+	void pooled()
+	{
+		this.lastPooled = System.currentTimeMillis();
+	}
+
 	void returnToPool()
 	{
 		if( this.clientSocket != null )
-		{
 			this.clientSocket.releaseSocket( this );
-			this.lastPooled = System.currentTimeMillis();
-		}
 		this.machine.listenRead( this.key ); // TODO The socket needs to be reading, otherwise client disconnects do not come through
 	}
 
