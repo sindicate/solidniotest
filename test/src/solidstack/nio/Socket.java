@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import solidstack.httpserver.FatalSocketException;
 import solidstack.io.FatalIOException;
@@ -32,7 +31,8 @@ public class Socket implements Runnable
 	private AtomicBoolean running = new AtomicBoolean();
 
 	private int debugId;
-	private AtomicInteger latch = new AtomicInteger( 0 ); // For assertions
+	private boolean writing;
+	private boolean reading;
 
 
 	public Socket( boolean server, SocketMachine machine )
@@ -77,27 +77,49 @@ public class Socket implements Runnable
 		return this.debugId;
 	}
 
-	public void acquire()
+	synchronized public void acquireReadWrite()
 	{
-		Assert.isTrue( this.latch.compareAndSet( 0, 1 ) );
+		Assert.isFalse( this.writing );
+		Assert.isFalse( this.reading );
+		this.writing = this.reading = true;
 	}
 
-	public void doubleAcquire()
+	synchronized public void acquireWrite()
 	{
-		Assert.isTrue( this.latch.compareAndSet( 0, 2 ) );
+		Assert.isFalse( this.writing );
+		this.writing = true;
 	}
 
-	public void release()
+	public void releaseWrite()
 	{
-		int l = this.latch.decrementAndGet();
-		if( l == 0 )
+		boolean returnToPool;
+		synchronized( this )
+		{
+			Assert.isTrue( this.writing );
+			this.writing = false;
+			returnToPool = !this.reading;
+		}
+		if( returnToPool )
 			returnToPool();
-		else
-			if( l != 1 )
-			{
-				close();
-				Assert.fail( "Expected 1, was " + l );
-			}
+	}
+
+	synchronized public void acquireRead()
+	{
+		Assert.isFalse( this.reading );
+		this.reading = true;
+	}
+
+	public void releaseRead()
+	{
+		boolean returnToPool;
+		synchronized( this )
+		{
+			Assert.isTrue( this.reading );
+			this.reading = false;
+			returnToPool = !this.writing;
+		}
+		if( returnToPool )
+			returnToPool();
 	}
 
 	public SocketInputStream getInputStream()
@@ -141,7 +163,7 @@ public class Socket implements Runnable
 		if( !isRunningAndSet() )
 		{
 			if( this.server )
-				acquire();
+				acquireRead();
 			getMachine().execute( this ); // TODO Also for write
 			Loggers.nio.trace( "Channel ({}) Started thread", getDebugId() );
 			return;
@@ -286,7 +308,7 @@ public class Socket implements Runnable
 			}
 			else
 			{
-				release();
+				releaseRead();
 				Loggers.nio.trace( "Channel ({}) Thread complete", getDebugId() );
 			}
 		}

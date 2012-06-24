@@ -79,7 +79,7 @@ public class ClientSocket
 
 	private void request( Socket socket, RequestWriter writer )
 	{
-		socket.doubleAcquire(); // Need 2 releases: this request and the received response
+		socket.acquireReadWrite();
 		boolean complete = false;
 		try
 		{
@@ -89,7 +89,7 @@ public class ClientSocket
 		finally
 		{
 			if( complete )
-				socket.release();
+				socket.releaseWrite();
 			else
 				socket.close();
 		}
