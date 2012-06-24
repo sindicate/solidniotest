@@ -1,6 +1,8 @@
 package solidstack.nio;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 
 import solidstack.lang.Assert;
 
@@ -50,6 +52,8 @@ public class SocketPool
 			this.pool.next = entry;
 		this.pool = entry;
 		this.pooled ++;
+
+		socket.pooled();
 	}
 
 	synchronized public Socket acquire()
@@ -86,25 +90,34 @@ public class SocketPool
 		return new int[] { this.all.size(), this.pooled };
 	}
 
-	synchronized public void timeout()
+	public void timeout()
 	{
+		// TODO Older sockets are at one end of the pool. Just cleanup from that end until one is found that did not timeout.
 		long now = System.currentTimeMillis();
-		Entry entry = this.pool;
 		int count = 0;
-		while( entry != null )
-		{
-			Socket socket = entry.socket;
-			if( socket.lastPooled() + 30000 <= now )
-			{
-				Assert.isTrue( this.all.remove( socket ) == entry );
-				remove( entry ); // This does not modify entry.previous
-				socket.poolTimeout(); // TODO Do this outside the synchronized block
-			}
-			count++;
+		List<Socket> timeouts = new ArrayList<Socket>();
 
-			entry = entry.previous;
+		synchronized( this )
+		{
+			Entry entry = this.pool;
+			while( entry != null )
+			{
+				Socket socket = entry.socket;
+				if( socket.lastPooled() + 30000 <= now )
+				{
+					timeouts.add( socket );
+					Assert.isTrue( this.all.remove( socket ) == entry );
+					remove( entry ); // This does not modify entry.previous
+				}
+
+				count++;
+				entry = entry.previous;
+			}
 		}
 		Loggers.nio.debug( "Considered {} pooled sockets for timeout", count );
+
+		for( Socket socket : timeouts )
+			socket.poolTimeout();
 	}
 
 	static class Entry
