@@ -1,14 +1,13 @@
 package solidstack.nio;
 
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 
 import solidstack.lang.Assert;
 
 public class SocketPool
 {
 	private Entry pool;
+	private Entry tail;
 	private int pooled;
 	private HashMap<Socket, Entry> all = new HashMap<Socket, Entry>();
 
@@ -30,12 +29,19 @@ public class SocketPool
 		entry.socket = null; // Entry is no longer pooled
 		if( entry.previous != null )
 			entry.previous.next = entry.next;
+		else
+		{
+			Assert.isTrue( this.tail == entry );
+			this.tail = entry.previous;
+		}
 		if( entry.next != null )
 			entry.next.previous = entry.previous;
 		else
 		{
 			Assert.isTrue( this.pool == entry );
 			this.pool = entry.previous;
+			if( this.pool == null )
+				Assert.isNull( this.tail );
 		}
 		this.pooled --;
 	}
@@ -50,6 +56,11 @@ public class SocketPool
 		entry.previous = this.pool;
 		if( this.pool != null )
 			this.pool.next = entry;
+		else
+		{
+			Assert.isNull( this.tail );
+			this.tail = entry;
+		}
 		this.pool = entry;
 		this.pooled ++;
 
@@ -63,6 +74,8 @@ public class SocketPool
 		Socket result = this.pool.socket;
 		this.pool.socket = null;
 		this.pool = this.pool.previous;
+		if( this.pool == null )
+			this.tail = null;
 		this.pooled --;
 		return result;
 	}
@@ -92,32 +105,56 @@ public class SocketPool
 
 	public void timeout()
 	{
-		// TODO Older sockets are at one end of the pool. Just cleanup from that end until one is found that did not timeout.
 		long now = System.currentTimeMillis();
-		int count = 0;
-		List<Socket> timeouts = new ArrayList<Socket>();
+
+		Entry tail;
+		Entry entry;
 
 		synchronized( this )
 		{
-			Entry entry = this.pool;
+			tail = this.tail;
+			entry = tail;
+
+			// TODO Maximum number of timeouts per occurrence or use closer thread
+			while( entry != null && entry.socket.lastPooled() + 30000 <= now )
+				entry = entry.next;
+
+			if( entry != null )
+			{
+				// entry is the first one that is not timing out
+				if( entry != tail )
+				{
+					this.tail = entry;
+					entry.previous.next = null;
+					entry.previous = null;
+				}
+				else
+					tail = null;
+			}
+			else
+			{
+				// all the entries are timing out, or pool and tail are already null
+				if( tail != null )
+					this.pool = this.tail = null;
+			}
+
+			entry = tail;
 			while( entry != null )
 			{
-				Socket socket = entry.socket;
-				if( socket.lastPooled() + 30000 <= now )
-				{
-					timeouts.add( socket );
-					Assert.isTrue( this.all.remove( socket ) == entry );
-					remove( entry ); // This does not modify entry.previous
-				}
+				Entry e = this.all.remove( entry.socket );
+				Assert.isTrue( e == entry, e != null ? e.toString() : "null" );
+				this.pooled --;
 
-				count++;
-				entry = entry.previous;
+				entry = entry.next;
 			}
 		}
-		Loggers.nio.debug( "Considered {} pooled sockets for timeout", count );
 
-		for( Socket socket : timeouts )
-			socket.poolTimeout();
+		entry = tail;
+		while( entry != null )
+		{
+			entry.socket.poolTimeout();
+			entry = entry.next;
+		}
 	}
 
 	static class Entry
