@@ -26,7 +26,6 @@ public class Socket implements Runnable
 
 	private ClientSocket clientSocket;
 	private ServerSocket serverSocket;
-	private long lastPooled;
 
 	private ResponseReader reader;
 	private AtomicBoolean running = new AtomicBoolean();
@@ -214,16 +213,6 @@ public class Socket implements Runnable
 				throw new FatalIOException( e );
 			}
 		}
-	}
-
-	long lastPooled()
-	{
-		return this.lastPooled;
-	}
-
-	void pooled()
-	{
-		this.lastPooled = System.currentTimeMillis();
 	}
 
 	void returnToPool()

@@ -50,6 +50,8 @@ public class SocketPool
 	{
 		Entry entry = this.all.get( socket );
 		Assert.notNull( entry );
+		entry.lastPooled = System.currentTimeMillis();
+
 		Assert.isNull( entry.socket ); // Entry should not already be pooled
 		entry.socket = socket;
 		entry.next = null;
@@ -63,8 +65,6 @@ public class SocketPool
 		}
 		this.pool = entry;
 		this.pooled ++;
-
-		socket.pooled();
 	}
 
 	synchronized public Socket acquire()
@@ -116,7 +116,7 @@ public class SocketPool
 			entry = tail;
 
 			// TODO Maximum number of timeouts per occurrence or use closer thread
-			while( entry != null && entry.socket.lastPooled() + 30000 <= now )
+			while( entry != null && entry.lastPooled + 30000 <= now )
 				entry = entry.next;
 
 			if( entry != null )
@@ -162,5 +162,6 @@ public class SocketPool
 		Entry previous;
 		Entry next;
 		Socket socket;
+		long lastPooled;
 	}
 }
