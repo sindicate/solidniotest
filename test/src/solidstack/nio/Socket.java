@@ -3,6 +3,7 @@ package solidstack.nio;
 import java.io.IOException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
+import java.util.LinkedList;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import solidstack.httpserver.FatalSocketException;
@@ -26,13 +27,11 @@ public class Socket implements Runnable
 	private ClientSocket clientSocket;
 	private ServerSocket serverSocket;
 
-	private ResponseReader reader;
 	private AtomicBoolean running = new AtomicBoolean();
 
 	private int debugId;
 	private boolean writing;
-	private boolean reading;
-
+	private LinkedList<ResponseReader> readerQueue = new LinkedList<ResponseReader>();
 
 	public Socket( boolean server, SocketMachine machine )
 	{
@@ -61,14 +60,11 @@ public class Socket implements Runnable
 		this.serverSocket = serverSocket;
 	}
 
-	public void setReader( ResponseReader reader )
-	{
-		this.reader = reader;
-	}
-
 	protected ResponseReader getReader()
 	{
-		return this.reader;
+		if( this.server )
+			return this.serverSocket.getReader();
+		return this.readerQueue.getFirst();
 	}
 
 	public int getDebugId()
@@ -76,11 +72,12 @@ public class Socket implements Runnable
 		return this.debugId;
 	}
 
-	synchronized public void acquireReadWrite()
+	synchronized public void acquireWriteRead( ResponseReader reader )
 	{
 		Assert.isFalse( this.writing );
-		Assert.isFalse( this.reading );
-		this.writing = this.reading = true;
+//		Assert.isFalse( this.reading );
+		this.writing = true;
+		acquireRead( reader );
 	}
 
 	synchronized public void acquireWrite()
@@ -96,26 +93,26 @@ public class Socket implements Runnable
 		{
 			Assert.isTrue( this.writing );
 			this.writing = false;
-			returnToPool = !this.reading;
+			returnToPool = this.readerQueue.size() < 4;
 		}
 		if( returnToPool )
 			returnToPool();
 	}
 
-	synchronized public void acquireRead()
+	synchronized public void acquireRead( ResponseReader reader )
 	{
-		Assert.isFalse( this.reading );
-		this.reading = true;
+//		Assert.isFalse( this.reading );
+		this.readerQueue.addLast( reader );
 	}
 
-	public void releaseRead()
+	public void releaseRead( ResponseReader reader )
 	{
 		boolean returnToPool;
 		synchronized( this )
 		{
-			Assert.isTrue( this.reading );
-			this.reading = false;
-			returnToPool = !this.writing;
+//			Assert.isTrue( this.reading );
+			returnToPool = !this.writing && this.readerQueue.size() == 4; // TODO Is this ok?
+			Assert.isTrue( this.readerQueue.removeFirst() == reader );
 		}
 		if( returnToPool )
 			returnToPool();
@@ -161,8 +158,8 @@ public class Socket implements Runnable
 		// Not running -> not waiting -> no notify needed
 		if( !isRunningAndSet() )
 		{
-			if( this.server )
-				acquireRead();
+//			if( this.server ) TODO We are missing listenRead now which is needed to detect disconnects
+//				acquireRead();
 			getMachine().execute( this ); // TODO Also for write
 			Loggers.nio.trace( "Channel ({}) Started thread", getDebugId() );
 			return;
@@ -267,22 +264,28 @@ public class Socket implements Runnable
 
 			while( true )
 			{
-				getReader().incoming( this );
-
-				if( isOpen() )
+				ResponseReader reader = getReader();
+				complete = false;
+				try
 				{
-					if( getInputStream().available() == 0 )
-					{
-						complete = true;
-						return;
-					}
-					Assert.fail( "Channel (" + getDebugId() + ") Shouldn't come here (yet): available = " + getInputStream().available() );
-				}
-				else
-				{
+					reader.incoming( this );
 					complete = true;
-					return;
 				}
+				finally
+				{
+					if( complete && !this.server )
+					{
+						releaseRead( reader );
+						Loggers.nio.trace( "Channel ({}) Release reader", getDebugId() );
+					}
+				}
+
+				if( !isOpen() )
+					return;
+				if( getInputStream().available() == 0 )
+					return;
+
+				Loggers.nio.trace( "Channel ({}) Continue reading", getDebugId() );
 			}
 		}
 		catch( Exception e )
@@ -298,10 +301,7 @@ public class Socket implements Runnable
 				Loggers.nio.trace( "Channel ({}) Thread aborted", getDebugId() );
 			}
 			else
-			{
-				releaseRead();
 				Loggers.nio.trace( "Channel ({}) Thread complete", getDebugId() );
-			}
 		}
 	}
 }

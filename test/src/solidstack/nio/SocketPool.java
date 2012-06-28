@@ -19,8 +19,10 @@ public class SocketPool
 	synchronized public void remove( Socket socket )
 	{
 		Entry entry = this.all.remove( socket );
-		if( entry.socket != null ) // Which means that the entry is pooled
-			remove( entry );
+		// Assert.notNull( entry ); TODO Maybe re-enable this assertion
+		if( entry != null )
+			if( entry.socket != null ) // Which means that the entry is pooled
+				remove( entry );
 	}
 
 	private void remove( Entry entry )
@@ -153,6 +155,7 @@ public class SocketPool
 		while( entry != null )
 		{
 			entry.socket.poolTimeout();
+			entry.socket = null; // Not in the pool
 			entry = entry.next;
 		}
 	}

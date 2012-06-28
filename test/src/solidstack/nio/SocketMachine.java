@@ -340,7 +340,7 @@ public class SocketMachine extends Thread
 									socket.setKey( key );
 									key.attach( socket );
 									serverSocket.addSocket( socket );
-									socket.setReader( serverSocket.getReader() );
+//									socket.setReader( serverSocket.getReader() );
 
 									Loggers.nio.trace( "Channel ({}) New channel, Readable", socket.getDebugId() );
 									socket.dataIsReady();

@@ -79,7 +79,7 @@ public class ClientSocket
 
 	private void request( Socket socket, RequestWriter writer )
 	{
-		socket.acquireReadWrite();
+		socket.acquireWrite();
 		boolean complete = false;
 		try
 		{

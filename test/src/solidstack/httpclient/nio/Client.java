@@ -61,7 +61,7 @@ public class Client
 			public void write( Socket socket )
 			{
 				MyResponseReader reader = new MyResponseReader( processor );
-				socket.setReader( reader );
+				socket.acquireRead( reader );
 
 				Client.this.machine.addTimeout( reader, socket, System.currentTimeMillis() + 10000 );
 
