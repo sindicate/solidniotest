@@ -45,16 +45,21 @@ public class NIOServer
 		this.maxConnections = maxConnections;
 	}
 
-	// TODO Do we need synchronized?
 	public boolean canAccept()
 	{
-		return this.all.size() < this.maxConnections;
+		synchronized( this.all )
+		{
+			return this.all.size() < this.maxConnections;
+		}
 	}
 
 	public void addSocket( ServerSocket socket )
 	{
-		this.all.add( socket );
-		socket.setServer( this );
+		synchronized( this.all )
+		{
+			this.all.add( socket );
+			socket.setServer( this );
+		}
 	}
 
 	int getDebugId()
@@ -64,7 +69,10 @@ public class NIOServer
 
 	public void channelClosed( Socket socket )
 	{
-//		Assert.isTrue( this.all.remove( socket ) ); TODO Enable
-		this.all.remove( socket );
+		synchronized( this.all )
+		{
+//			Assert.isTrue( this.all.remove( socket ) ); TODO Enable
+			this.all.remove( socket );
+		}
 	}
 }

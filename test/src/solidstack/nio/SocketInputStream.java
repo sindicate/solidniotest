@@ -11,12 +11,12 @@ import solidstack.lang.Assert;
 
 public class SocketInputStream extends InputStream
 {
-	private Socket handler;
+	private Socket socket;
 	private ByteBuffer buffer;
 
 	public SocketInputStream( Socket handler )
 	{
-		this.handler = handler;
+		this.socket = handler;
 		this.buffer = ByteBuffer.allocate( 8192 );
 		this.buffer.flip();
 	}
@@ -24,7 +24,7 @@ public class SocketInputStream extends InputStream
 	@Override
 	synchronized public int read() throws IOException
 	{
-		if( this.handler == null )
+		if( this.socket == null )
 			return -1;
 		if( !this.buffer.hasRemaining() )
 		{
@@ -39,7 +39,7 @@ public class SocketInputStream extends InputStream
 	@Override
 	synchronized public int read( byte[] b, int off, int len ) throws IOException
 	{
-		if( this.handler == null )
+		if( this.socket == null )
 			return -1;
 		if( !this.buffer.hasRemaining() )
 		{
@@ -79,7 +79,7 @@ public class SocketInputStream extends InputStream
 	// TODO What if it read too much? Like when 2 requests are chained. The handler needs to keep reading.
 	private void readChannel()
 	{
-		SocketChannel channel = this.handler.getChannel();
+		SocketChannel channel = this.socket.getChannel();
 		int id = DebugId.getId( channel );
 
 		Assert.isFalse( this.buffer.hasRemaining() );
@@ -99,7 +99,7 @@ public class SocketInputStream extends InputStream
 					synchronized( this )
 					{
 						// Prevent losing a notify: listenRead() must be called within the synchronized block
-						this.handler.getMachine().listenRead( this.handler.getKey() );
+						this.socket.listenRead();
 						Loggers.nio.trace( "Channel ({}) Input stream calls wait()", id, read );
 						wait();
 					}
@@ -118,8 +118,8 @@ public class SocketInputStream extends InputStream
 
 			if( read == -1 )
 			{
-				this.handler.close(); // TODO This should cancel all keys
-				this.handler = null;
+				this.socket.close(); // TODO This should cancel all keys
+				this.socket = null;
 			}
 //			else
 //				logBuffer( id, this.buffer );

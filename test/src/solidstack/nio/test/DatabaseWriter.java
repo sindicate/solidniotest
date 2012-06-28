@@ -15,7 +15,7 @@ import solidstack.nio.SocketMachine;
 
 public class DatabaseWriter extends Thread
 {
-	private SocketMachine dispatcher;
+	private SocketMachine machine;
 	private PreparedStatement insert;
 	private Connection connection;
 
@@ -65,7 +65,7 @@ public class DatabaseWriter extends Thread
 
 	public DatabaseWriter( SocketMachine dispatcher, boolean stats )
 	{
-		this.dispatcher = dispatcher;
+		this.machine = dispatcher;
 		this.stats = stats;
 		setPriority( NORM_PRIORITY + 1 );
 
@@ -143,7 +143,7 @@ public class DatabaseWriter extends Thread
 
 					// TODO Start a lot of tasks in one burst
 					for( Element element : b )
-						this.dispatcher.execute( element.runnable );
+						this.machine.execute( element.runnable );
 
 					synchronized( DatabaseWriter.class )
 					{

@@ -91,6 +91,11 @@ abstract public class Socket implements Runnable
 		Loggers.nio.trace( "Channel ({}) Signalled outputstream", getDebugId() );
 	}
 
+	public void listenRead()
+	{
+		this.machine.listenRead( this.key );
+	}
+
 	public boolean isOpen()
 	{
 		return this.key.channel().isOpen();

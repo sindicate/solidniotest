@@ -138,7 +138,7 @@ public class ClientSocket extends Socket
 	{
 		this.clientSocket.releaseSocket( this );
 		// TODO Add listenRead to the superclass
-		getMachine().listenRead( getKey() ); // TODO The socket needs to be reading, otherwise client disconnects do not come through
+		listenRead(); // TODO The socket needs to be reading, otherwise client disconnects do not come through
 	}
 
 	@Override

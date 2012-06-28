@@ -65,7 +65,6 @@ public class ServerSocket extends Socket
 	public void run()
 	{
 		SocketInputStream in = getInputStream();
-		boolean complete = false;
 		try
 		{
 			try
@@ -92,27 +91,25 @@ public class ServerSocket extends Socket
 				if( !isOpen() )
 					break;
 				if( getInputStream().available() == 0 )
+				{
+					listenRead();
 					break;
+				}
 
 				Loggers.nio.trace( "Channel ({}) Continue reading", getDebugId() );
 			}
 
-			complete = true;
+			Loggers.nio.trace( "Channel ({}) Thread complete", getDebugId() );
 		}
 		catch( Exception e )
 		{
 			Loggers.nio.debug( "Channel ({}) Unhandled exception", getDebugId(), e );
+			close();
+			Loggers.nio.trace( "Channel ({}) Thread aborted", getDebugId() );
 		}
 		finally
 		{
 			endOfRunning();
-			if( !complete )
-			{
-				close();
-				Loggers.nio.trace( "Channel ({}) Thread aborted", getDebugId() );
-			}
-			else
-				Loggers.nio.trace( "Channel ({}) Thread complete", getDebugId() );
 		}
 	}
 }
