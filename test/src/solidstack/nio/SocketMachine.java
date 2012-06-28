@@ -37,7 +37,7 @@ public class SocketMachine extends Thread
 	private int timeoutAdded;
 	private int timeoutRemoved;
 
-	private List<ClientSocket> clientSockets = new ArrayList<ClientSocket>();
+	private List<NIOClient> clientSockets = new ArrayList<NIOClient>();
 	// TODO Add the ServerSocket to process inactive sockets
 
 	private long nextLogging;
@@ -69,18 +69,18 @@ public class SocketMachine extends Thread
 		this.executor.execute( command );
 	}
 
-	public ServerSocket listen( InetSocketAddress address ) throws IOException
+	public NIOServer listen( InetSocketAddress address ) throws IOException
 	{
 		return listen( address, 50 );
 	}
 
-	public ServerSocket listen( InetSocketAddress address, int backlog ) throws IOException
+	public NIOServer listen( InetSocketAddress address, int backlog ) throws IOException
 	{
 		ServerSocketChannel server = ServerSocketChannel.open();
 		server.configureBlocking( false );
 		server.socket().bind( address, backlog );
 
-		ServerSocket socket = new ServerSocket( this );
+		NIOServer socket = new NIOServer( this );
 
 		try
 		{
@@ -108,9 +108,9 @@ public class SocketMachine extends Thread
 		return socket;
 	}
 
-	public ClientSocket createClientSocket( String hostname, int port )
+	public NIOClient createClientSocket( String hostname, int port )
 	{
-		return new ClientSocket( hostname, port, this );
+		return new NIOClient( hostname, port, this );
 	}
 
 	public void listenAccept( SelectionKey key )
@@ -177,9 +177,9 @@ public class SocketMachine extends Thread
 		}
 	}
 
-	public Socket connect( String hostname, int port ) throws ConnectException
+	public ClientSocket connect( String hostname, int port ) throws ConnectException
 	{
-		Socket socket = new Socket( false, this );
+		ClientSocket socket = new ClientSocket( this );
 		connect( hostname, port, socket );
 		Loggers.nio.trace( "Channel ({}) New" , socket.getDebugId() );
 		return socket;
@@ -218,11 +218,11 @@ public class SocketMachine extends Thread
 		}
 	}
 
-	public void addTimeout( ResponseReader listener, Socket handler, long when )
+	public void addTimeout( ResponseReader listener, ClientSocket socket, long when )
 	{
 		synchronized( this.timeouts )
 		{
-			this.timeouts.put( listener, new Timeout( listener, handler, when ) );
+			this.timeouts.put( listener, new Timeout( listener, socket, when ) );
 			this.timeoutAdded ++;
 		}
 	}
@@ -241,7 +241,7 @@ public class SocketMachine extends Thread
 		return new int[] { this.timeoutAdded, this.timeoutRemoved };
 	}
 
-	public void registerClientSocket( ClientSocket socket )
+	public void registerClientSocket( NIOClient socket )
 	{
 		synchronized( this.clientSockets )
 		{
@@ -326,8 +326,8 @@ public class SocketMachine extends Thread
 
 						if( key.isAcceptable() )
 						{
-							ServerSocket serverSocket = (ServerSocket)key.attachment();
-							if( serverSocket.canAccept() )
+							NIOServer nioServer = (NIOServer)key.attachment();
+							if( nioServer.canAccept() )
 							{
 								ServerSocketChannel server = (ServerSocketChannel)key.channel();
 								SocketChannel channel = server.accept();
@@ -336,10 +336,10 @@ public class SocketMachine extends Thread
 									channel.configureBlocking( false );
 									key = channel.register( this.selector, 0 );
 
-									Socket socket = new Socket( true, this );
+									ServerSocket socket = new ServerSocket( this );
 									socket.setKey( key );
 									key.attach( socket );
-									serverSocket.addSocket( socket );
+									nioServer.addSocket( socket );
 //									socket.setReader( serverSocket.getReader() );
 
 									Loggers.nio.trace( "Channel ({}) New channel, Readable", socket.getDebugId() );
@@ -435,9 +435,9 @@ public class SocketMachine extends Thread
 					}
 
 					for( Timeout timeout : timedouts )
-						timeout.getListener().timeout( timeout.getHandler() );
+						timeout.getListener().timeout( timeout.getSocket() );
 
-					for( ClientSocket socket : this.clientSockets )
+					for( NIOClient socket : this.clientSockets )
 						socket.timeout();
 
 //					// TODO This should not be needed

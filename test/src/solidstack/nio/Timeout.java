@@ -4,13 +4,13 @@ package solidstack.nio;
 public class Timeout
 {
 	private ResponseReader listener;
-	private Socket handler;
+	private ClientSocket socket;
 	private long when;
 
-	public Timeout( ResponseReader listener, Socket handler, long when )
+	public Timeout( ResponseReader listener, ClientSocket handler, long when )
 	{
 		this.listener = listener;
-		this.handler = handler;
+		this.socket = handler;
 		this.when = when;
 	}
 
@@ -24,8 +24,8 @@ public class Timeout
 		return this.listener;
 	}
 
-	public Socket getHandler()
+	public ClientSocket getSocket()
 	{
-		return this.handler;
+		return this.socket;
 	}
 }

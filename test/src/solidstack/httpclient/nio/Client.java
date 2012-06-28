@@ -18,6 +18,7 @@ import solidstack.httpserver.HttpHeaderTokenizer;
 import solidstack.httpserver.Token;
 import solidstack.io.FatalIOException;
 import solidstack.nio.ClientSocket;
+import solidstack.nio.NIOClient;
 import solidstack.nio.RequestWriter;
 import solidstack.nio.ResponseReader;
 import solidstack.nio.Socket;
@@ -28,7 +29,7 @@ public class Client
 {
 	SocketMachine machine;
 
-	private ClientSocket socket;
+	private NIOClient socket;
 
 	// TODO Non blocking request when waiting on a connections?
 	public Client( String hostname, int port, SocketMachine machine )
@@ -58,7 +59,7 @@ public class Client
 		this.socket.request( new RequestWriter()
 		{
 			@Override
-			public void write( Socket socket )
+			public void write( ClientSocket socket )
 			{
 				MyResponseReader reader = new MyResponseReader( processor );
 				socket.acquireRead( reader );
@@ -80,7 +81,7 @@ public class Client
 			this.processor = processor;
 		}
 
-		public void incoming( Socket socket ) throws IOException
+		public void incoming( ClientSocket socket ) throws IOException
 		{
 			Response response = receiveResponse( socket.getInputStream() );
 			InputStream in = response.getInputStream();
@@ -93,7 +94,7 @@ public class Client
 			Client.this.machine.removeTimeout( this );
 		}
 
-		public void timeout( Socket socket ) throws IOException
+		public void timeout( ClientSocket socket ) throws IOException
 		{
 			this.processor.timeout();
 			socket.timeout();

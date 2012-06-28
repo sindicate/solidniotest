@@ -48,7 +48,7 @@ public class SocketPool
 		this.pooled --;
 	}
 
-	synchronized public void release( Socket socket )
+	synchronized public void release( ClientSocket socket )
 	{
 		Entry entry = this.all.get( socket );
 		Assert.notNull( entry );
@@ -69,11 +69,11 @@ public class SocketPool
 		this.pooled ++;
 	}
 
-	synchronized public Socket acquire()
+	synchronized public ClientSocket acquire()
 	{
 		if( this.pool == null )
 			return null;
-		Socket result = this.pool.socket;
+		ClientSocket result = this.pool.socket;
 		this.pool.socket = null;
 		this.pool = this.pool.previous;
 		if( this.pool == null )
@@ -164,7 +164,7 @@ public class SocketPool
 	{
 		Entry previous;
 		Entry next;
-		Socket socket;
+		ClientSocket socket;
 		long lastPooled;
 	}
 }

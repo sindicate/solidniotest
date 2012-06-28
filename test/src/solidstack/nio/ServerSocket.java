@@ -1,70 +1,118 @@
 package solidstack.nio;
 
-import java.nio.channels.SelectionKey;
-import java.util.LinkedList;
-import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+import solidstack.httpserver.FatalSocketException;
 
 
-public class ServerSocket
+/**
+ * Thread that handles an incoming connection.
+ *
+ * @author René M. de Bloois
+ */
+public class ServerSocket extends Socket
 {
-	private SocketMachine machine;
-	private SelectionKey key;
+	private NIOServer server;
 
-	private int maxConnections;
-	private List<Socket> all = new LinkedList<Socket>();
-
-	private ResponseReader reader;
-
-	private int debugId;
+	private AtomicBoolean running = new AtomicBoolean();
 
 
 	public ServerSocket( SocketMachine machine )
 	{
-		this.machine = machine;
+		super( machine );
 	}
 
-	void setKey( SelectionKey key )
+	public void setServer( NIOServer server )
 	{
-		this.key = key;
-		this.debugId = DebugId.getId( key.channel() );
+		this.server = server;
 	}
 
-	public void setReader( ResponseReader reader )
+	@Override
+	public void close()
 	{
-		this.reader = reader;
-		this.machine.listenAccept( this.key );
+		super.close();
+		if( this.server != null )
+			this.server.channelClosed( this ); // TODO Ignore if the socket.close() is called twice
 	}
 
-	protected ResponseReader getReader()
+	@Override
+	void dataIsReady()
 	{
-		return this.reader;
+		// Not running -> not waiting -> no notify needed
+		if( !isRunningAndSet() )
+		{
+//			if( this.server ) TODO We are missing listenRead now which is needed to detect disconnects
+//				acquireRead();
+			getMachine().execute( this ); // TODO Also for write
+			Loggers.nio.trace( "Channel ({}) Started thread", getDebugId() );
+			return;
+		}
+
+		super.dataIsReady();
 	}
 
-	public void setMaxConnections( int maxConnections )
+	protected boolean isRunningAndSet()
 	{
-		this.maxConnections = maxConnections;
+		return !this.running.compareAndSet( false, true );
 	}
 
-	// TODO Do we need synchronized?
-	public boolean canAccept()
+	protected void endOfRunning()
 	{
-		return this.all.size() < this.maxConnections;
+		this.running.set( false );
 	}
 
-	public void addSocket( Socket socket )
+	@Override
+	public void run()
 	{
-		this.all.add( socket );
-		socket.setServerSocket( this );
-	}
+		SocketInputStream in = getInputStream();
+		boolean complete = false;
+		try
+		{
+			try
+			{
+				if( in.endOfFile() )
+				{
+					Loggers.nio.debug( "Connection closed" );
+					return;
+				}
+			}
+			catch( FatalSocketException e )
+			{
+				Loggers.nio.debug( "Connection forcibly closed" );
+				return;
+			}
 
-	int getDebugId()
-	{
-		return this.debugId;
-	}
+			Loggers.nio.trace( "Channel ({}) Task started", getDebugId() );
 
-	public void channelClosed( Socket socket )
-	{
-//		Assert.isTrue( this.all.remove( socket ) ); TODO Enable
-		this.all.remove( socket );
+			while( true )
+			{
+				RequestReader reader = this.server.getReader();
+				reader.incoming( this );
+
+				if( !isOpen() )
+					break;
+				if( getInputStream().available() == 0 )
+					break;
+
+				Loggers.nio.trace( "Channel ({}) Continue reading", getDebugId() );
+			}
+
+			complete = true;
+		}
+		catch( Exception e )
+		{
+			Loggers.nio.debug( "Channel ({}) Unhandled exception", getDebugId(), e );
+		}
+		finally
+		{
+			endOfRunning();
+			if( !complete )
+			{
+				close();
+				Loggers.nio.trace( "Channel ({}) Thread aborted", getDebugId() );
+			}
+			else
+				Loggers.nio.trace( "Channel ({}) Thread complete", getDebugId() );
+		}
 	}
 }

@@ -1,171 +1,209 @@
 package solidstack.nio;
 
-import java.net.ConnectException;
 import java.util.LinkedList;
-import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicBoolean;
 
-import solidstack.lang.ThreadInterrupted;
+import solidstack.httpserver.FatalSocketException;
+import solidstack.lang.Assert;
 
 
-
-public class ClientSocket
+/**
+ * Thread that handles an incoming connection.
+ *
+ * @author René M. de Bloois
+ */
+public class ClientSocket extends Socket
 {
-	SocketMachine machine;
+	static final private int PIPELINE = 1;
 
-	String hostname;
-	int port;
+	private NIOClient clientSocket;
 
-	private int maxConnections = 100;
-	private int maxQueueSize = 10000;
+	private AtomicBoolean running = new AtomicBoolean();
 
-	private SocketPool pool = new SocketPool();
-	Semaphore expand = new Semaphore( 0 );
+	private boolean writing;
+	private LinkedList<ResponseReader> readerQueue = new LinkedList<ResponseReader>();
 
-	private LinkedList<RequestWriter> queue = new LinkedList<RequestWriter>();
-	private ConnectingThread thread;
-
-	public ClientSocket( String hostname, int port, SocketMachine machine )
+	public ClientSocket( SocketMachine machine )
 	{
-		this.hostname = hostname;
-		this.port = port;
-		this.machine = machine;
-
-		machine.registerClientSocket( this ); // TODO Need Client.close() which removes this pool from the dispatcher
-
-		this.thread = new ConnectingThread();
-		this.thread.start();
+		super( machine );
 	}
 
-	public void setMaxConnections( int maxConnections )
+	public void setClient( NIOClient client )
 	{
-		this.maxConnections = maxConnections;
+		this.clientSocket = client;
 	}
 
-	public int[] getCounts()
+	protected ResponseReader getReader()
 	{
-		int[] pooled = this.pool.getCounts();
-		int queued;
-		synchronized( this.queue )
+		return this.readerQueue.getFirst();
+	}
+
+	synchronized public void acquireWriteRead( ResponseReader reader )
+	{
+		Assert.isFalse( this.writing );
+//		Assert.isFalse( this.reading );
+		this.writing = true;
+		acquireRead( reader );
+	}
+
+	synchronized public void acquireWrite()
+	{
+		Assert.isFalse( this.writing );
+		this.writing = true;
+	}
+
+	public void releaseWrite()
+	{
+		boolean returnToPool;
+		synchronized( this )
 		{
-			queued = this.queue.size();
+			Assert.isTrue( this.writing );
+			this.writing = false;
+			returnToPool = this.readerQueue.size() < PIPELINE;
 		}
-		return new int[] { pooled[ 0 ], pooled[ 1 ], queued };
+		if( returnToPool )
+			returnToPool();
 	}
 
-	// Only called by returnToPool()
-	public void releaseSocket( Socket socket )
+	synchronized public void acquireRead( ResponseReader reader )
 	{
-		RequestWriter writer = null;
-		synchronized( this.queue )
+//		Assert.isFalse( this.reading );
+		this.readerQueue.addLast( reader );
+	}
+
+	public void releaseRead( ResponseReader reader )
+	{
+		boolean returnToPool;
+		synchronized( this )
 		{
-			if( !this.queue.isEmpty() )
-				writer = this.queue.removeFirst();
+//			Assert.isTrue( this.reading );
+			returnToPool = !this.writing && this.readerQueue.size() == PIPELINE; // TODO Is this ok?
+			Assert.isTrue( this.readerQueue.removeFirst() == reader );
 		}
-		if( writer != null )
-			request( socket, writer );
-		else
-			this.pool.release( socket );
+		if( returnToPool )
+			returnToPool();
 	}
 
-	public void channelClosed( Socket socket )
+	protected boolean isRunningAndSet()
 	{
-		this.pool.remove( socket );
+		return !this.running.compareAndSet( false, true );
 	}
 
-	public void channelLost( Socket socket )
+	protected void endOfRunning()
 	{
-		this.pool.remove( socket );
+		this.running.set( false );
 	}
 
-	private void request( Socket socket, RequestWriter writer )
+	@Override
+	void dataIsReady()
 	{
-		socket.acquireWrite();
-		boolean complete = false;
-		try
+		// Not running -> not waiting -> no notify needed
+		if( !isRunningAndSet() )
 		{
-			writer.write( socket );
-			complete = true;
-		}
-		finally
-		{
-			if( complete )
-				socket.releaseWrite();
-			else
-				socket.close();
-		}
-	}
-
-	public void request( RequestWriter writer ) throws ConnectException
-	{
-		Socket socket = this.pool.acquire();
-		if( socket != null )
-			Loggers.nio.trace( "Channel ({}) From pool", socket.getDebugId() );
-		else
-		{
-			// TODO Maybe the pool should make the connections
-			// TODO Maybe we need a queue and the pool executes the queue when a connection is released
-			// FIXME This if should be synchronized
-			if( this.pool.size() + this.expand.availablePermits() >= this.maxConnections )
-			{
-				synchronized( this.queue )
-				{
-					if( this.queue.size() >= this.maxQueueSize )
-						throw new TooManyConnectionsException( "Queue is full" );
-					this.queue.addLast( writer );
-				}
-				Loggers.nio.trace( "Request added to queue" );
-				return;
-//				socket = this.pool.waitForSocket();
-			}
-
-			synchronized( this.queue )
-			{
-				if( this.queue.size() >= this.maxQueueSize )
-					throw new TooManyConnectionsException( "Queue is full" );
-				this.queue.addLast( writer );
-			}
-			Loggers.nio.trace( "Request added to queue" );
-
-			this.expand.release();
+			getMachine().execute( this ); // TODO Also for write
+			Loggers.nio.trace( "Channel ({}) Started thread", getDebugId() );
 			return;
 		}
 
-		request( socket, writer );
+		super.dataIsReady();
 	}
 
+	@Override
+	public void close()
+	{
+		super.close();
+		this.clientSocket.channelClosed( this );
+	}
+
+	void lost()
+	{
+		super.close();
+		this.clientSocket.channelLost( this );
+	}
+
+	void poolTimeout()
+	{
+		Loggers.nio.trace( "Channel ({}) PoolTimeout", getDebugId() );
+		super.close();
+	}
+
+	// TODO Make this package private
 	public void timeout()
 	{
-		this.pool.timeout();
+		Loggers.nio.trace( "Channel ({}) Timeout", getDebugId() );
+		close();
 	}
 
-	public class ConnectingThread extends Thread
+	void returnToPool()
 	{
-		@Override
-		public void run()
+		this.clientSocket.releaseSocket( this );
+		// TODO Add listenRead to the superclass
+		getMachine().listenRead( getKey() ); // TODO The socket needs to be reading, otherwise client disconnects do not come through
+	}
+
+	@Override
+	public void run()
+	{
+		SocketInputStream in = getInputStream();
+		boolean complete = false;
+		try
 		{
-			while( !isInterrupted() )
+			try
 			{
-				try
+				if( in.endOfFile() )
 				{
-					ClientSocket.this.expand.acquire();
-				}
-				catch( InterruptedException e1 )
-				{
-					throw new ThreadInterrupted();
-				}
-				try
-				{
-					Socket socket = ClientSocket.this.machine.connect( ClientSocket.this.hostname, ClientSocket.this.port );
-					ClientSocket.this.pool.add( socket );
-					socket.setClientSocket( ClientSocket.this );
-					releaseSocket( socket );
-				}
-				catch( ConnectException e )
-				{
-					ClientSocket.this.expand.drainPermits();
-					Loggers.nio.error( e.toString() );
+					Loggers.nio.debug( "Connection closed" );
+					return;
 				}
 			}
+			catch( FatalSocketException e )
+			{
+				Loggers.nio.debug( "Connection forcibly closed" );
+				return;
+			}
+
+			Loggers.nio.trace( "Channel ({}) Task started", getDebugId() );
+
+			while( true )
+			{
+				ResponseReader reader = getReader();
+				complete = false;
+				try
+				{
+					reader.incoming( this );
+					complete = true;
+				}
+				finally
+				{
+					if( complete )
+					{
+						releaseRead( reader );
+						Loggers.nio.trace( "Channel ({}) Release reader", getDebugId() );
+					}
+				}
+
+				if( !isOpen() )
+					return;
+				if( getInputStream().available() == 0 )
+					return;
+
+				Loggers.nio.trace( "Channel ({}) Continue reading", getDebugId() );
+			}
+		}
+		catch( Exception e )
+		{
+			Loggers.nio.debug( "Channel ({}) Unhandled exception", getDebugId(), e );
+		}
+		finally
+		{
+			endOfRunning();
+			if( !complete )
+			{
+				close();
+				Loggers.nio.trace( "Channel ({}) Thread aborted", getDebugId() );
+			}
+			else
+				Loggers.nio.trace( "Channel ({}) Thread complete", getDebugId() );
 		}
 	}
 }

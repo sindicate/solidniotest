@@ -16,9 +16,9 @@ import solidstack.httpserver.Response;
 import solidstack.httpserver.Token;
 import solidstack.httpserver.UrlEncodedParser;
 import solidstack.lang.SystemException;
-import solidstack.nio.ResponseReader;
+import solidstack.nio.NIOServer;
+import solidstack.nio.RequestReader;
 import solidstack.nio.ServerSocket;
-import solidstack.nio.Socket;
 import solidstack.nio.SocketMachine;
 
 
@@ -27,7 +27,7 @@ public class Server
 	private int port;
 	private ApplicationContext application; // TODO Make this a Map
 	private SocketMachine dispatcher;
-	private ServerSocket socket;
+	private NIOServer socket;
 //	boolean debug;
 
 	public Server( SocketMachine dispatcher, int port ) throws IOException
@@ -59,9 +59,9 @@ public class Server
 		this.socket.setMaxConnections( maxConnections );
 	}
 
-	public class MyRequestReader implements ResponseReader
+	public class MyRequestReader implements RequestReader
 	{
-		public void incoming( Socket socket ) throws IOException
+		public void incoming( ServerSocket socket ) throws IOException
 		{
 			Request request = new Request();
 
@@ -200,11 +200,6 @@ public class Server
 			{
 				// TODO Add to timeout manager
 			}
-		}
-
-		public void timeout( Socket handler ) throws IOException
-		{
-			throw new UnsupportedOperationException();
 		}
 	}
 }
