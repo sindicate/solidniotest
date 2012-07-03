@@ -7,7 +7,6 @@ import solidstack.httpserver.HttpResponse;
 import solidstack.httpserver.RequestContext;
 import solidstack.httpserver.ResponseOutputStream;
 import solidstack.httpserver.Servlet;
-import solidstack.httpserver.nio.AsyncResponse;
 import solidstack.nio.Loggers;
 
 
@@ -15,7 +14,7 @@ public class BackEndRootServlet implements Servlet
 {
 	public HttpResponse call( final RequestContext context )
 	{
-		AsyncResponse response = new AsyncResponse()
+		HttpResponse response = new HttpResponse()
 		{
 			@Override
 			public void write( ResponseOutputStream out )

@@ -1,9 +1,13 @@
 package solidstack.nio;
 
+import java.io.IOException;
 import java.util.LinkedList;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import solidstack.httpserver.FatalSocketException;
+import solidstack.httpserver.Response;
+import solidstack.httpserver.ResponseListener;
+import solidstack.io.FatalIOException;
 
 
 /**
@@ -11,7 +15,7 @@ import solidstack.httpserver.FatalSocketException;
  *
  * @author René M. de Bloois
  */
-public class ServerSocket extends Socket implements Runnable
+public class ServerSocket extends Socket implements Runnable, ResponseListener
 {
 	private NIOServer server;
 	private AtomicBoolean running = new AtomicBoolean();
@@ -60,11 +64,13 @@ public class ServerSocket extends Socket implements Runnable
 		synchronized( this.responseQueue  )
 		{
 			this.responseQueue.addLast( response );
+			response.setListener( this ); // TODO Is this correct locking wise?
 			if( response.isReady() )
 				responseIsReady( response );
 		}
 	}
 
+	@Override
 	public void responseIsReady( Response response )
 	{
 		boolean started = false;
@@ -93,12 +99,29 @@ public class ServerSocket extends Socket implements Runnable
 									ResponseOutputStream out = new ResponseOutputStream( getOutputStream() );
 									Loggers.nio.trace( "Channel ({}) Writing response", getDebugId() );
 									response.write( out );
+									try
+									{
+										out.close(); // Need close() for the chunkedoutputstream
+									}
+									catch( IOException e )
+									{
+										throw new FatalIOException( e );
+									}
 									synchronized( ServerSocket.this.responseQueue )
 									{
-										if( !ServerSocket.this.responseQueue.getFirst().isReady() )
+										Response first = ServerSocket.this.responseQueue.peekFirst();
+										if( first == null || !first.isReady() )
 										{
 											ServerSocket.this.queueRunning = false;
 											complete = true;
+											try
+											{
+												getOutputStream().flush(); // TODO Is this ok?
+											}
+											catch( IOException e )
+											{
+												throw new FatalIOException( e );
+											}
 											return;
 										}
 										response = ServerSocket.this.responseQueue.removeFirst();

@@ -145,6 +145,8 @@ public class ClientSocket extends Socket implements Runnable
 	@Override
 	public void run()
 	{
+		Loggers.nio.trace( "Channel ({}) Client socket task started", getDebugId() );
+
 		SocketInputStream in = getInputStream();
 		boolean complete = false;
 		try
@@ -162,8 +164,6 @@ public class ClientSocket extends Socket implements Runnable
 				Loggers.nio.debug( "Connection forcibly closed" );
 				return;
 			}
-
-			Loggers.nio.trace( "Channel ({}) Task started", getDebugId() );
 
 			while( true )
 			{
@@ -201,10 +201,10 @@ public class ClientSocket extends Socket implements Runnable
 			if( !complete )
 			{
 				close();
-				Loggers.nio.trace( "Channel ({}) Thread aborted", getDebugId() );
+				Loggers.nio.trace( "Channel ({}) Client socket task aborted", getDebugId() );
 			}
 			else
-				Loggers.nio.trace( "Channel ({}) Thread complete", getDebugId() );
+				Loggers.nio.trace( "Channel ({}) Client socket task complete", getDebugId() );
 		}
 	}
 }

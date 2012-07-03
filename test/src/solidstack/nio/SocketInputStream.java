@@ -91,7 +91,7 @@ public class SocketInputStream extends InputStream
 		{
 			int read = channel.read( this.buffer );
 			if( Loggers.nio.isTraceEnabled() )
-				Loggers.nio.trace( "Channel ({}) read #{} bytes from channel", id, read );
+				Loggers.nio.trace( "Channel ({}) read #{} bytes from channel", new Object[] { id, read, new Throwable() } );
 			while( read == 0 )
 			{
 				try
@@ -121,8 +121,8 @@ public class SocketInputStream extends InputStream
 				this.socket.close(); // TODO This should cancel all keys
 				this.socket = null;
 			}
-//			else
-//				logBuffer( id, this.buffer );
+			else
+				logBuffer( id, this.buffer );
 		}
 		catch( IOException e )
 		{

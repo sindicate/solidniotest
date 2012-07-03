@@ -1,7 +1,6 @@
 package solidstack.httpserver.nio;
 
 import java.io.IOException;
-import java.io.OutputStream;
 import java.net.InetSocketAddress;
 
 import solidstack.httpserver.ApplicationContext;
@@ -11,13 +10,12 @@ import solidstack.httpserver.HttpHeaderTokenizer;
 import solidstack.httpserver.HttpResponse;
 import solidstack.httpserver.Request;
 import solidstack.httpserver.RequestContext;
-import solidstack.httpserver.ResponseOutputStream;
+import solidstack.httpserver.Response;
 import solidstack.httpserver.Token;
 import solidstack.httpserver.UrlEncodedParser;
 import solidstack.lang.SystemException;
 import solidstack.nio.NIOServer;
 import solidstack.nio.RequestReader;
-import solidstack.nio.Response;
 import solidstack.nio.ServerSocket;
 import solidstack.nio.SocketMachine;
 
@@ -149,15 +147,19 @@ public class Server
 			try
 			{
 				// TODO 2 try catches, one for read one for write
-				final HttpResponse response = getApplication().dispatch( context );
-				return new Response()
-				{
-					@Override
-					public void write( OutputStream out )
-					{
-						response.write( new ResponseOutputStream( out, request.isConnectionClose() ) );
-					}
-				};
+				HttpResponse response = getApplication().dispatch( context );
+				response.setConnectionClose( request.isConnectionClose() );
+				return response;
+//				Response r = new Response()
+//				{
+//					@Override
+//					public void write( OutputStream out )
+//					{
+//						response.write( new ResponseOutputStream( out, request.isConnectionClose() ) );
+//					}
+//				};
+//				response.setResponse( r );
+//				return r;
 			}
 			catch( FatalSocketException e )
 			{

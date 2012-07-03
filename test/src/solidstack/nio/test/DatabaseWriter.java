@@ -8,7 +8,7 @@ import java.sql.Statement;
 import java.util.LinkedList;
 import java.util.List;
 
-import solidstack.httpserver.nio.AsyncResponse;
+import solidstack.httpserver.Response;
 import solidstack.lang.SystemException;
 import solidstack.lang.ThreadInterrupted;
 import solidstack.nio.Loggers;
@@ -170,7 +170,7 @@ public class DatabaseWriter extends Thread
 		}
 	}
 
-	static public void write( String string, AsyncResponse response )
+	static public void write( String string, Response response )
 	{
 		synchronized( bufferLock )
 		{
@@ -181,9 +181,9 @@ public class DatabaseWriter extends Thread
 	static private class Element
 	{
 		String string;
-		AsyncResponse response;
+		Response response;
 
-		public Element( String string, AsyncResponse response )
+		public Element( String string, Response response )
 		{
 			this.string = string;
 			this.response = response;
