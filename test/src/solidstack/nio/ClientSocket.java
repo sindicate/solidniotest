@@ -14,7 +14,7 @@ import solidstack.lang.Assert;
  */
 public class ClientSocket extends Socket implements Runnable
 {
-	static final private int PIPELINE = 1;
+	static final private int PIPELINE = 10;
 
 	private NIOClient client;
 

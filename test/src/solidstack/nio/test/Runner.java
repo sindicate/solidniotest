@@ -34,7 +34,7 @@ public class Runner
 		this.machine = machine;
 //		this.client = new Client( "192.168.0.105", 8001, machine );
 		this.client = new Client( "localhost", 8001, machine );
-		this.client.setMaxConnections( 400 );
+		this.client.setMaxConnections( 1 );
 		this.request = new Request( "/" );
 //		this.request.setHeader( "Host", "www.nu.nl" );
 		this.runnable = new MyRunnable();

@@ -98,9 +98,7 @@ public class NIOClient
 	public void request( RequestWriter writer ) throws ConnectException
 	{
 		ClientSocket socket = this.pool.acquire();
-		if( socket != null )
-			Loggers.nio.trace( "Channel ({}) From pool", socket.getDebugId() );
-		else
+		if( socket == null )
 		{
 			// TODO Maybe the pool should make the connections
 			// TODO Maybe we need a queue and the pool executes the queue when a connection is released

@@ -91,7 +91,7 @@ public class SocketInputStream extends InputStream
 		{
 			int read = channel.read( this.buffer );
 			if( Loggers.nio.isTraceEnabled() )
-				Loggers.nio.trace( "Channel ({}) read #{} bytes from channel", new Object[] { id, read, new Throwable() } );
+				Loggers.nio.trace( "Channel ({}) read #{} bytes from channel", new Object[] { id, read } );
 			while( read == 0 )
 			{
 				try

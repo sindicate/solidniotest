@@ -25,8 +25,11 @@ public class SocketPool
 				remove( entry );
 	}
 
+	// Remove from the pool
 	private void remove( Entry entry )
 	{
+		Loggers.nio.trace( "Channel ({}) Remove from pool", entry.socket.getDebugId() );
+
 		Assert.notNull( entry.socket );
 		entry.socket = null; // Entry is no longer pooled
 		if( entry.previous != null )
@@ -34,7 +37,7 @@ public class SocketPool
 		else
 		{
 			Assert.isTrue( this.tail == entry );
-			this.tail = entry.previous;
+			this.tail = entry.next;
 		}
 		if( entry.next != null )
 			entry.next.previous = entry.previous;
@@ -50,6 +53,8 @@ public class SocketPool
 
 	synchronized public void release( ClientSocket socket )
 	{
+		Loggers.nio.trace( "Channel ({}) To pool", socket.getDebugId() );
+
 		Entry entry = this.all.get( socket );
 		Assert.notNull( entry );
 		entry.lastPooled = System.currentTimeMillis();
@@ -79,6 +84,7 @@ public class SocketPool
 		if( this.pool == null )
 			this.tail = null;
 		this.pooled --;
+		Loggers.nio.trace( "Channel ({}) From pool", result.getDebugId() );
 		return result;
 	}
 
@@ -155,6 +161,7 @@ public class SocketPool
 		while( entry != null )
 		{
 			entry.socket.poolTimeout();
+			Loggers.nio.trace( "Channel ({}) Timed out from pool", entry.socket.getDebugId() );
 			entry.socket = null; // Not in the pool
 			entry = entry.next;
 		}
