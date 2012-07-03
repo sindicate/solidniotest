@@ -3,8 +3,6 @@ package solidstack.nio;
 import java.io.IOException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
-import java.util.LinkedList;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import solidstack.io.FatalIOException;
 
@@ -14,18 +12,14 @@ import solidstack.io.FatalIOException;
  *
  * @author René M. de Bloois
  */
-abstract public class Socket implements Runnable
+abstract public class Socket
 {
 	private SocketMachine machine;
 	private SelectionKey key;
 	private SocketInputStream in;
 	private SocketOutputStream out;
 
-	private AtomicBoolean running = new AtomicBoolean();
-
 	private int debugId;
-	private boolean writing;
-	private LinkedList<ResponseReader> readerQueue = new LinkedList<ResponseReader>();
 
 	public Socket( SocketMachine machine )
 	{
@@ -73,7 +67,7 @@ abstract public class Socket implements Runnable
 		return this.key;
 	}
 
-	void dataIsReady()
+	void readReady()
 	{
 		synchronized( this.in )
 		{
@@ -82,7 +76,7 @@ abstract public class Socket implements Runnable
 		Loggers.nio.trace( "Channel ({}) Signalled inputstream", getDebugId() );
 	}
 
-	void writeIsReady()
+	void writeReady()
 	{
 		synchronized( this.out )
 		{
@@ -111,7 +105,6 @@ abstract public class Socket implements Runnable
 		this.key.cancel();
 		if( isOpen() )
 		{
-			Loggers.nio.trace( "Channel ({}) Closed", getDebugId() );
 			try
 			{
 				this.key.channel().close();
@@ -120,8 +113,7 @@ abstract public class Socket implements Runnable
 			{
 				throw new FatalIOException( e );
 			}
+			Loggers.nio.trace( "Channel ({}) Closed", getDebugId() );
 		}
 	}
-
-	abstract public void run();
 }

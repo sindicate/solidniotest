@@ -343,7 +343,7 @@ public class SocketMachine extends Thread
 //									socket.setReader( serverSocket.getReader() );
 
 									Loggers.nio.trace( "Channel ({}) New channel, Readable", socket.getDebugId() );
-									socket.dataIsReady();
+									socket.readReady();
 								}
 								else
 									Loggers.nio.trace( "Lost accept" );
@@ -366,7 +366,7 @@ public class SocketMachine extends Thread
 							}
 
 							Socket socket = (Socket)key.attachment();
-							socket.dataIsReady();
+							socket.readReady();
 						}
 
 						if( key.isWritable() )
@@ -381,7 +381,7 @@ public class SocketMachine extends Thread
 							}
 
 							Socket socket = (Socket)key.attachment();
-							socket.writeIsReady();
+							socket.writeReady();
 						}
 
 						if( key.isConnectable() )

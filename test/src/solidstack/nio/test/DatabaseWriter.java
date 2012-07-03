@@ -8,6 +8,7 @@ import java.sql.Statement;
 import java.util.LinkedList;
 import java.util.List;
 
+import solidstack.httpserver.nio.AsyncResponse;
 import solidstack.lang.SystemException;
 import solidstack.lang.ThreadInterrupted;
 import solidstack.nio.Loggers;
@@ -143,7 +144,7 @@ public class DatabaseWriter extends Thread
 
 					// TODO Start a lot of tasks in one burst
 					for( Element element : b )
-						this.machine.execute( element.runnable );
+						element.response.ready();
 
 					synchronized( DatabaseWriter.class )
 					{
@@ -169,23 +170,23 @@ public class DatabaseWriter extends Thread
 		}
 	}
 
-	static public void write( String string, Runnable runnable )
+	static public void write( String string, AsyncResponse response )
 	{
 		synchronized( bufferLock )
 		{
-			buffer.add( new Element( string, runnable ) );
+			buffer.add( new Element( string, response ) );
 		}
 	}
 
 	static private class Element
 	{
 		String string;
-		Runnable runnable;
+		AsyncResponse response;
 
-		public Element( String string, Runnable runnable )
+		public Element( String string, AsyncResponse response )
 		{
 			this.string = string;
-			this.runnable = runnable;
+			this.response = response;
 		}
 	}
 }

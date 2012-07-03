@@ -1,5 +1,6 @@
 package solidstack.nio;
 
+import java.util.LinkedList;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import solidstack.httpserver.FatalSocketException;
@@ -10,11 +11,13 @@ import solidstack.httpserver.FatalSocketException;
  *
  * @author René M. de Bloois
  */
-public class ServerSocket extends Socket
+public class ServerSocket extends Socket implements Runnable
 {
 	private NIOServer server;
-
 	private AtomicBoolean running = new AtomicBoolean();
+
+	LinkedList<Response> responseQueue = new LinkedList<Response>();
+	boolean queueRunning;
 
 
 	public ServerSocket( SocketMachine machine )
@@ -36,7 +39,7 @@ public class ServerSocket extends Socket
 	}
 
 	@Override
-	void dataIsReady()
+	void readReady()
 	{
 		// Not running -> not waiting -> no notify needed
 		if( !isRunningAndSet() )
@@ -48,7 +51,73 @@ public class ServerSocket extends Socket
 			return;
 		}
 
-		super.dataIsReady();
+		super.readReady();
+	}
+
+	public void add( Response response )
+	{
+		Loggers.nio.trace( "Channel ({}) Adding response", getDebugId() );
+		synchronized( this.responseQueue  )
+		{
+			this.responseQueue.addLast( response );
+			if( response.isReady() )
+				responseIsReady( response );
+		}
+	}
+
+	public void responseIsReady( Response response )
+	{
+		boolean started = false;
+		synchronized( this.responseQueue  )
+		{
+			response.setReady();
+			if( this.responseQueue.getFirst().isReady() )
+			{
+				if( !this.queueRunning )
+				{
+					this.queueRunning = true;
+					started = true;
+					final Response firstResponse = ServerSocket.this.responseQueue.removeFirst();
+					getMachine().execute( new Runnable()
+					{
+						@Override
+						public void run()
+						{
+							Loggers.nio.trace( "Channel ({}) Started response queue", getDebugId() );
+							boolean complete = false;
+							try
+							{
+								Response response = firstResponse;
+								while( true )
+								{
+									ResponseOutputStream out = new ResponseOutputStream( getOutputStream() );
+									Loggers.nio.trace( "Channel ({}) Writing response", getDebugId() );
+									response.write( out );
+									synchronized( ServerSocket.this.responseQueue )
+									{
+										if( !ServerSocket.this.responseQueue.getFirst().isReady() )
+										{
+											ServerSocket.this.queueRunning = false;
+											complete = true;
+											return;
+										}
+										response = ServerSocket.this.responseQueue.removeFirst();
+									}
+								}
+							}
+							finally
+							{
+								if( !complete )
+									close(); // TODO What about synchronized?
+								Loggers.nio.trace( "Channel ({}) Ended response queue", getDebugId() );
+							}
+						}
+					} );
+				}
+			}
+		}
+		if( started )
+			Loggers.nio.trace( "Channel ({}) Starting response queue", getDebugId() );
 	}
 
 	protected boolean isRunningAndSet()
@@ -86,10 +155,15 @@ public class ServerSocket extends Socket
 			while( true )
 			{
 				RequestReader reader = this.server.getReader();
-				reader.incoming( this );
-
+				Response response = reader.incoming( this );
 				if( !isOpen() )
 					break;
+
+				if( !response.needsInput() )
+					add( response );
+				else
+					throw new UnsupportedOperationException();
+
 				if( getInputStream().available() == 0 )
 				{
 					listenRead();

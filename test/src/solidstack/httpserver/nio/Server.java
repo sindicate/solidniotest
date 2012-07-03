@@ -2,22 +2,22 @@ package solidstack.httpserver.nio;
 
 import java.io.IOException;
 import java.io.OutputStream;
-import java.io.PrintWriter;
 import java.net.InetSocketAddress;
 
 import solidstack.httpserver.ApplicationContext;
-import solidstack.httpserver.CloseBlockingOutputStream;
 import solidstack.httpserver.FatalSocketException;
 import solidstack.httpserver.HttpException;
 import solidstack.httpserver.HttpHeaderTokenizer;
+import solidstack.httpserver.HttpResponse;
 import solidstack.httpserver.Request;
 import solidstack.httpserver.RequestContext;
-import solidstack.httpserver.Response;
+import solidstack.httpserver.ResponseOutputStream;
 import solidstack.httpserver.Token;
 import solidstack.httpserver.UrlEncodedParser;
 import solidstack.lang.SystemException;
 import solidstack.nio.NIOServer;
 import solidstack.nio.RequestReader;
+import solidstack.nio.Response;
 import solidstack.nio.ServerSocket;
 import solidstack.nio.SocketMachine;
 
@@ -26,17 +26,17 @@ public class Server
 {
 	private int port;
 	private ApplicationContext application; // TODO Make this a Map
-	private SocketMachine dispatcher;
-	private NIOServer socket;
+	private SocketMachine machine;
+	private NIOServer server;
 //	boolean debug;
 
 	public Server( SocketMachine dispatcher, int port ) throws IOException
 	{
-		this.dispatcher = dispatcher;
+		this.machine = dispatcher;
 		this.port = port;
 
-		this.socket = dispatcher.listen( new InetSocketAddress( port ) );
-		this.socket.setReader( new MyRequestReader() );
+		this.server = dispatcher.listen( new InetSocketAddress( port ) );
+		this.server.setReader( new MyRequestReader() );
 	}
 
 	public void setApplication( ApplicationContext application )
@@ -51,19 +51,19 @@ public class Server
 
 	public SocketMachine getDispatcher()
 	{
-		return this.dispatcher;
+		return this.machine;
 	}
 
 	public void setMaxConnections( int maxConnections )
 	{
-		this.socket.setMaxConnections( maxConnections );
+		this.server.setMaxConnections( maxConnections );
 	}
 
 	public class MyRequestReader implements RequestReader
 	{
-		public void incoming( ServerSocket socket ) throws IOException
+		public Response incoming( ServerSocket socket ) throws IOException
 		{
-			Request request = new Request();
+			final Request request = new Request();
 
 			HttpHeaderTokenizer tokenizer = new HttpHeaderTokenizer( socket.getInputStream() );
 
@@ -142,13 +142,22 @@ public class Server
 				}
 			}
 
-			OutputStream out = socket.getOutputStream();
-			out = new CloseBlockingOutputStream( out );
-			Response response = new Response( request, out );
-			RequestContext context = new RequestContext( request, response, getApplication() );
+//			OutputStream out = socket.getOutputStream();
+//			out = new CloseBlockingOutputStream( out );
+//			Response response = new Response( request, out );
+			RequestContext context = new RequestContext( request, getApplication() );
 			try
 			{
-				getApplication().dispatch( context );
+				// TODO 2 try catches, one for read one for write
+				final HttpResponse response = getApplication().dispatch( context );
+				return new Response()
+				{
+					@Override
+					public void write( OutputStream out )
+					{
+						response.write( new ResponseOutputStream( out, request.isConnectionClose() ) );
+					}
+				};
 			}
 			catch( FatalSocketException e )
 			{
@@ -160,15 +169,15 @@ public class Server
 				if( t.getClass().equals( HttpException.class ) && t.getCause() != null )
 					t = t.getCause();
 //				t.printStackTrace( System.out );
-				if( !response.isCommitted() )
-				{
-					response.reset();
-					response.setStatusCode( 500, "Internal Server Error" );
-					response.setContentType( "text/plain", "ISO-8859-1" );
-					PrintWriter writer = response.getPrintWriter( "ISO-8859-1" );
-					t.printStackTrace( writer );
-					writer.flush();
-				}
+//				if( !out.isCommitted() ) // TODO Later
+//				{
+//					out.clear();
+//					out.setStatusCode( 500, "Internal Server Error" );
+//					out.setContentType( "text/plain", "ISO-8859-1" );
+//					PrintWriter writer = new PrintWriter( new OutputStreamWriter( out, "ISO-8859-1" ) );
+//					t.printStackTrace( writer );
+//					writer.flush();
+//				}
 				if( e instanceof IOException )
 					throw (IOException)e;
 				if( e instanceof RuntimeException )
@@ -177,29 +186,30 @@ public class Server
 				// TODO Is the socket going to be closed?
 			}
 
-			if( !context.isAsync() )
-			{
-				response.finish();
-
-				// TODO Detect Connection: close headers on the request & response
-				// TODO A GET request has no body, when a POST comes without content size, the connection should be closed.
-				// TODO What about socket.getKeepAlive() and the other properties?
-
-				String length = response.getHeader( "Content-Length" );
-				if( length == null )
-				{
-					String transfer = response.getHeader( "Transfer-Encoding" );
-					if( !"chunked".equals( transfer ) )
-						socket.close();
-				}
-
-				if( request.isConnectionClose() )
-					socket.close();
-			}
-			else
-			{
-				// TODO Add to timeout manager
-			}
+			// TODO Where should this go?
+//			if( !( response instanceof AsyncResponse ) )
+//			{
+//				out.close();
+//
+//				// TODO Detect Connection: close headers on the request & response
+//				// TODO A GET request has no body, when a POST comes without content size, the connection should be closed.
+//				// TODO What about socket.getKeepAlive() and the other properties?
+//
+//				String length = out.getHeader( "Content-Length" ); // TODO Must return what has been written to the output
+//				if( length == null )
+//				{
+//					String transfer = out.getHeader( "Transfer-Encoding" );
+//					if( !"chunked".equals( transfer ) )
+//						socket.close();
+//				}
+//
+//				if( request.isConnectionClose() )
+//					socket.close();
+//			}
+//			else
+//			{
+//				// TODO Add to timeout manager
+//			}
 		}
 	}
 }

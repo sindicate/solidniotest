@@ -12,11 +12,11 @@ import solidstack.lang.Assert;
  *
  * @author René M. de Bloois
  */
-public class ClientSocket extends Socket
+public class ClientSocket extends Socket implements Runnable
 {
 	static final private int PIPELINE = 1;
 
-	private NIOClient clientSocket;
+	private NIOClient client;
 
 	private AtomicBoolean running = new AtomicBoolean();
 
@@ -30,11 +30,12 @@ public class ClientSocket extends Socket
 
 	public void setClient( NIOClient client )
 	{
-		this.clientSocket = client;
+		this.client = client;
 	}
 
 	protected ResponseReader getReader()
 	{
+		Loggers.nio.trace( "Channel ({}) Get reader", getDebugId() );
 		return this.readerQueue.getFirst();
 	}
 
@@ -95,7 +96,7 @@ public class ClientSocket extends Socket
 	}
 
 	@Override
-	void dataIsReady()
+	void readReady()
 	{
 		// Not running -> not waiting -> no notify needed
 		if( !isRunningAndSet() )
@@ -105,20 +106,20 @@ public class ClientSocket extends Socket
 			return;
 		}
 
-		super.dataIsReady();
+		super.readReady();
 	}
 
 	@Override
 	public void close()
 	{
 		super.close();
-		this.clientSocket.channelClosed( this );
+		this.client.channelClosed( this );
 	}
 
 	void lost()
 	{
 		super.close();
-		this.clientSocket.channelLost( this );
+		this.client.channelLost( this );
 	}
 
 	void poolTimeout()
@@ -136,7 +137,7 @@ public class ClientSocket extends Socket
 
 	void returnToPool()
 	{
-		this.clientSocket.releaseSocket( this );
+		this.client.releaseSocket( this );
 		// TODO Add listenRead to the superclass
 		listenRead(); // TODO The socket needs to be reading, otherwise client disconnects do not come through
 	}

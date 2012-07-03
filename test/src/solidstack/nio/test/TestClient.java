@@ -18,7 +18,7 @@ public class TestClient
 		Runner runner = new Runner( machine );
 
 		generator.setReceiver( runner );
-		generator.setGoal( 100 );
+		generator.setGoal( 1 );
 //		generator.setRamp( 60 );
 		Thread.currentThread().setPriority( Thread.NORM_PRIORITY + 1 );
 		generator.run();
