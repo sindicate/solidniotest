@@ -1,9 +1,11 @@
 package solidstack.nio;
 
+import java.io.IOException;
 import java.util.LinkedList;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import solidstack.httpserver.FatalSocketException;
+import solidstack.io.FatalIOException;
 import solidstack.lang.Assert;
 
 
@@ -14,14 +16,19 @@ import solidstack.lang.Assert;
  */
 public class ClientSocket extends Socket implements Runnable
 {
-	static final private int PIPELINE = 10;
+	static final private int PIPELINE = 2;
 
 	private NIOClient client;
 
 	private AtomicBoolean running = new AtomicBoolean();
 
 	private boolean writing;
-	private LinkedList<ResponseReader> readerQueue = new LinkedList<ResponseReader>();
+	LinkedList<RequestWriter> writerQueue = new LinkedList<RequestWriter>();
+	boolean queueRunning;
+
+	LinkedList<ResponseReader> readerQueue = new LinkedList<ResponseReader>();
+
+	private int active;
 
 	public ClientSocket( SocketMachine machine )
 	{
@@ -33,19 +40,96 @@ public class ClientSocket extends Socket implements Runnable
 		this.client = client;
 	}
 
-	protected ResponseReader getReader()
+	synchronized public void request( RequestWriter request )
 	{
-		Loggers.nio.trace( "Channel ({}) Get reader", getDebugId() );
-		return this.readerQueue.getFirst();
+		this.active ++;
+
+		if( this.queueRunning )
+		{
+			this.writerQueue.addLast( request );
+			return;
+		}
+		this.queueRunning = true;
+
+		RequestWriter w;
+		if( this.writerQueue.isEmpty() )
+			w = request;
+		else
+		{
+			this.writerQueue.addLast( request );
+			w = this.writerQueue.removeFirst();
+		}
+		final RequestWriter firstWriter = w;
+		getMachine().execute( new Runnable()
+		{
+			@Override
+			public void run()
+			{
+				Loggers.nio.trace( "Channel ({}) Started request queue", getDebugId() );
+				boolean complete = false;
+				try
+				{
+					RequestWriter writer = firstWriter;
+					while( true )
+					{
+						ResponseOutputStream out = new ResponseOutputStream( getOutputStream() );
+						Loggers.nio.trace( "Channel ({}) Writing request", getDebugId() );
+						ResponseReader reader = writer.write( out );
+						synchronized( ClientSocket.this )
+						{
+							ClientSocket.this.readerQueue.add( reader );
+						}
+						try
+						{
+							out.close(); // Need close() for the chunkedoutputstream
+						}
+						catch( IOException e )
+						{
+							throw new FatalIOException( e );
+						}
+						synchronized( ClientSocket.this )
+						{
+							writer = ClientSocket.this.writerQueue.pollFirst();
+							if( writer == null )
+							{
+								complete = true;
+								try
+								{
+									getOutputStream().flush(); // TODO Is this ok?
+								}
+								catch( IOException e )
+								{
+									throw new FatalIOException( e );
+								}
+								ClientSocket.this.queueRunning = false;
+								return;
+							}
+						}
+					}
+				}
+				finally
+				{
+					if( !complete )
+						close(); // TODO What about synchronized?
+					Loggers.nio.trace( "Channel ({}) Ended request queue", getDebugId() );
+				}
+			}
+		} );
 	}
 
-	synchronized public void acquireWriteRead( ResponseReader reader )
-	{
-		Assert.isFalse( this.writing );
-//		Assert.isFalse( this.reading );
-		this.writing = true;
-		acquireRead( reader );
-	}
+//	protected ResponseReader getReader()
+//	{
+//		Loggers.nio.trace( "Channel ({}) Get reader", getDebugId() );
+//		return this.readerQueue.getFirst();
+//	}
+
+//	synchronized public void acquireWriteRead( ResponseReader reader )
+//	{
+//		Assert.isFalse( this.writing );
+////		Assert.isFalse( this.reading );
+//		this.writing = true;
+//		acquireRead( reader );
+//	}
 
 	synchronized public void acquireWrite()
 	{
@@ -53,37 +137,37 @@ public class ClientSocket extends Socket implements Runnable
 		this.writing = true;
 	}
 
-	public void releaseWrite()
-	{
-		boolean returnToPool;
-		synchronized( this )
-		{
-			Assert.isTrue( this.writing );
-			this.writing = false;
-			returnToPool = this.readerQueue.size() < PIPELINE;
-		}
-		if( returnToPool )
-			returnToPool();
-	}
+//	public void releaseWrite()
+//	{
+//		boolean returnToPool;
+//		synchronized( this )
+//		{
+//			Assert.isTrue( this.writing );
+//			this.writing = false;
+//			returnToPool = this.readerQueue.size() < PIPELINE;
+//		}
+//		if( returnToPool )
+//			returnToPool();
+//	}
 
-	synchronized public void acquireRead( ResponseReader reader )
-	{
-//		Assert.isFalse( this.reading );
-		this.readerQueue.addLast( reader );
-	}
+//	synchronized public void acquireRead( ResponseReader reader )
+//	{
+////		Assert.isFalse( this.reading );
+//		this.readerQueue.addLast( reader );
+//	}
 
-	public void releaseRead( ResponseReader reader )
-	{
-		boolean returnToPool;
-		synchronized( this )
-		{
-//			Assert.isTrue( this.reading );
-			returnToPool = !this.writing && this.readerQueue.size() == PIPELINE; // TODO Is this ok?
-			Assert.isTrue( this.readerQueue.removeFirst() == reader );
-		}
-		if( returnToPool )
-			returnToPool();
-	}
+//	public void releaseRead( ResponseReader reader )
+//	{
+//		boolean returnToPool;
+//		synchronized( this )
+//		{
+////			Assert.isTrue( this.reading );
+//			returnToPool = !this.writing && this.readerQueue.size() == PIPELINE; // TODO Is this ok?
+//			Assert.isTrue( this.readerQueue.removeFirst() == reader );
+//		}
+//		if( returnToPool )
+//			returnToPool();
+//	}
 
 	protected boolean isRunningAndSet()
 	{
@@ -135,17 +219,17 @@ public class ClientSocket extends Socket implements Runnable
 		close();
 	}
 
-	void returnToPool()
-	{
-		this.client.releaseSocket( this );
-		// TODO Add listenRead to the superclass
-		listenRead(); // TODO The socket needs to be reading, otherwise client disconnects do not come through
-	}
+//	void returnToPool()
+//	{
+//		this.client.releaseSocket( this );
+//		// TODO Add listenRead to the superclass
+//		listenRead(); // TODO The socket needs to be reading, otherwise client disconnects do not come through
+//	}
 
 	@Override
 	public void run()
 	{
-		Loggers.nio.trace( "Channel ({}) Client socket task started", getDebugId() );
+		Loggers.nio.trace( "Channel ({}) Input task started", getDebugId() );
 
 		SocketInputStream in = getInputStream();
 		boolean complete = false;
@@ -167,26 +251,21 @@ public class ClientSocket extends Socket implements Runnable
 
 			while( true )
 			{
-				ResponseReader reader = getReader();
-				complete = false;
-				try
+				ResponseReader reader;
+				synchronized( this )
 				{
-					reader.incoming( this );
-					complete = true;
+					reader = this.readerQueue.removeFirst();
 				}
-				finally
-				{
-					if( complete )
-					{
-						releaseRead( reader );
-						Loggers.nio.trace( "Channel ({}) Release reader", getDebugId() );
-					}
-				}
+				reader.incoming( this );
+				this.active --;
 
 				if( !isOpen() )
 					return;
 				if( getInputStream().available() == 0 )
+				{
+					complete = true;
 					return;
+				}
 
 				Loggers.nio.trace( "Channel ({}) Continue reading", getDebugId() );
 			}
@@ -201,10 +280,13 @@ public class ClientSocket extends Socket implements Runnable
 			if( !complete )
 			{
 				close();
-				Loggers.nio.trace( "Channel ({}) Client socket task aborted", getDebugId() );
+				Loggers.nio.trace( "Channel ({}) Input task aborted", getDebugId() );
 			}
 			else
-				Loggers.nio.trace( "Channel ({}) Client socket task complete", getDebugId() );
+			{
+				listenRead(); // TODO The socket needs to be reading, otherwise client disconnects do not come through
+				Loggers.nio.trace( "Channel ({}) Input task complete", getDebugId() );
+			}
 		}
 	}
 }

@@ -21,7 +21,6 @@ import solidstack.nio.ClientSocket;
 import solidstack.nio.NIOClient;
 import solidstack.nio.RequestWriter;
 import solidstack.nio.ResponseReader;
-import solidstack.nio.Socket;
 import solidstack.nio.SocketMachine;
 
 
@@ -59,14 +58,13 @@ public class Client
 		this.socket.request( new RequestWriter()
 		{
 			@Override
-			public void write( ClientSocket socket )
+			public ResponseReader write( OutputStream out )
 			{
-				MyResponseReader reader = new MyResponseReader( processor );
-				socket.acquireRead( reader );
+				// TODO Add timeout back
+//				Client.this.machine.addTimeout( reader, Client.this.socket, System.currentTimeMillis() + 10000 );
 
-				Client.this.machine.addTimeout( reader, socket, System.currentTimeMillis() + 10000 );
-
-				sendRequest( request, socket );
+				sendRequest( request, out );
+				return new MyResponseReader( processor );
 			}
 		} );
 	}
@@ -107,9 +105,8 @@ public class Client
 	static private final byte[] COLON = ": ".getBytes();
 //	static private final byte[] CHANNEL = "?channel=".getBytes();
 
-	void sendRequest( Request request, Socket socket )
+	void sendRequest( Request request, OutputStream out )
 	{
-		OutputStream out = socket.getOutputStream();
 		try
 		{
 			out.write( GET );

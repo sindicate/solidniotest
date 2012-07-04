@@ -112,7 +112,7 @@ public class ServerSocket extends Socket implements Runnable, ResponseListener
 										Response first = ServerSocket.this.responseQueue.peekFirst();
 										if( first == null || !first.isReady() )
 										{
-											ServerSocket.this.queueRunning = false;
+											ServerSocket.this.queueRunning = false; // TODO What if exception?
 											complete = true;
 											try
 											{

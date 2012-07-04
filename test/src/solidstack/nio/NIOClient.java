@@ -2,7 +2,6 @@ package solidstack.nio;
 
 import java.net.ConnectException;
 import java.util.LinkedList;
-import java.util.concurrent.Semaphore;
 
 import solidstack.lang.ThreadInterrupted;
 
@@ -18,8 +17,8 @@ public class NIOClient
 	private int maxConnections = 100;
 	private int maxQueueSize = 10000;
 
-	private SocketPool pool = new SocketPool();
-	Semaphore expand = new Semaphore( 0 );
+	SocketPool pool = new SocketPool();
+	Integer expand = new Integer( 0 );
 
 	private LinkedList<RequestWriter> queue = new LinkedList<RequestWriter>();
 	private ConnectingThread thread;
@@ -52,19 +51,30 @@ public class NIOClient
 		return new int[] { pooled[ 0 ], pooled[ 1 ], queued };
 	}
 
-	// Only called by returnToPool()
 	public void releaseSocket( ClientSocket socket )
 	{
-		RequestWriter writer = null;
+		this.pool.release( socket );
+
+		RequestWriter queued = null;
 		synchronized( this.queue )
 		{
-			if( !this.queue.isEmpty() )
-				writer = this.queue.removeFirst();
+			queued = this.queue.pollFirst();
 		}
-		if( writer != null )
-			request( socket, writer );
-		else
-			this.pool.release( socket );
+		if( queued != null )
+		{
+			Loggers.nio.trace( "Processing request queue" );
+			while( queued != null )
+			{
+				if( !request( queued, true ) )
+					return;
+
+				synchronized( this.queue )
+				{
+					queued = this.queue.pollFirst();
+				}
+			}
+			Loggers.nio.trace( "End processing request queue" );
+		}
 	}
 
 	public void channelClosed( Socket socket )
@@ -77,58 +87,53 @@ public class NIOClient
 		this.pool.remove( socket );
 	}
 
-	private void request( ClientSocket socket, RequestWriter writer )
-	{
-		socket.acquireWrite();
-		boolean complete = false;
-		try
-		{
-			writer.write( socket );
-			complete = true;
-		}
-		finally
-		{
-			if( complete )
-				socket.releaseWrite();
-			else
-				socket.close();
-		}
-	}
-
 	public void request( RequestWriter writer ) throws ConnectException
 	{
+		Loggers.nio.trace( "Request received" );
+		request( writer, false );
+	}
+
+	private boolean request( RequestWriter writer, boolean existing )
+	{
 		ClientSocket socket = this.pool.acquire();
-		if( socket == null )
+		if( socket != null )
 		{
-			// TODO Maybe the pool should make the connections
-			// TODO Maybe we need a queue and the pool executes the queue when a connection is released
-			// FIXME This if should be synchronized
-			if( this.pool.size() + this.expand.availablePermits() >= this.maxConnections )
-			{
-				synchronized( this.queue )
-				{
-					if( this.queue.size() >= this.maxQueueSize )
-						throw new TooManyConnectionsException( "Queue is full" );
-					this.queue.addLast( writer );
-				}
-				Loggers.nio.trace( "Request added to queue" );
-				return;
-//				socket = this.pool.waitForSocket();
-			}
-
-			synchronized( this.queue )
-			{
-				if( this.queue.size() >= this.maxQueueSize )
-					throw new TooManyConnectionsException( "Queue is full" );
-				this.queue.addLast( writer );
-			}
-			Loggers.nio.trace( "Request added to queue" );
-
-			this.expand.release();
-			return;
+			socket.request( writer );
+			return true;
 		}
 
-		request( socket, writer );
+		if( existing )
+		{
+			synchronized( this.queue )
+			{
+				this.queue.addFirst( writer );
+			}
+			return false;
+		}
+
+		synchronized( this.queue )
+		{
+			if( this.queue.size() >= this.maxQueueSize )
+				throw new TooManyConnectionsException( "Queue is full" );
+			this.queue.addLast( writer );
+		}
+		Loggers.nio.trace( "Request added to queue" );
+
+		// TODO Maybe the pool should make the connections
+		// TODO Maybe we need a queue and the pool executes the queue when a connection is released
+		// FIXME This if should be synchronized
+
+		synchronized( this.expand )
+		{
+			if( this.pool.size() + this.expand < this.maxConnections )
+			{
+				if( this.expand == 0 )
+					this.expand.notify();
+				this.expand ++;
+			}
+		}
+
+		return false;
 	}
 
 	public void timeout()
@@ -141,28 +146,44 @@ public class NIOClient
 		@Override
 		public void run()
 		{
-			while( !isInterrupted() )
+			try
 			{
-				try
+				while( !isInterrupted() )
 				{
-					NIOClient.this.expand.acquire();
+					int expand;
+					synchronized( NIOClient.this.expand )
+					{
+						if( NIOClient.this.expand == 0 )
+							NIOClient.this.expand.wait();
+						expand = NIOClient.this.expand;
+					}
+					if( expand > 0 ) // Check again for spurious notifies
+					{
+						try
+						{
+							ClientSocket socket = NIOClient.this.machine.connect( NIOClient.this.hostname, NIOClient.this.port );
+							synchronized( NIOClient.this.expand )
+							{
+								NIOClient.this.pool.add( socket );
+								NIOClient.this.expand --;
+							}
+							socket.setClient( NIOClient.this );
+							releaseSocket( socket );
+						}
+						catch( ConnectException e )
+						{
+							synchronized( NIOClient.this.expand )
+							{
+								NIOClient.this.expand = 0;
+							}
+							Loggers.nio.error( e.toString() );
+						}
+					}
 				}
-				catch( InterruptedException e1 )
-				{
-					throw new ThreadInterrupted();
-				}
-				try
-				{
-					ClientSocket socket = NIOClient.this.machine.connect( NIOClient.this.hostname, NIOClient.this.port );
-					NIOClient.this.pool.add( socket );
-					socket.setClient( NIOClient.this );
-					releaseSocket( socket );
-				}
-				catch( ConnectException e )
-				{
-					NIOClient.this.expand.drainPermits();
-					Loggers.nio.error( e.toString() );
-				}
+			}
+			catch( InterruptedException e )
+			{
+				throw new ThreadInterrupted();
 			}
 		}
 	}

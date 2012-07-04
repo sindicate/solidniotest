@@ -28,12 +28,12 @@ public class ResponseOutputStream extends OutputStream
 	@Override
 	public void close() throws IOException
 	{
-		flush();
+//		flush();
 	}
 
 	@Override
 	public void flush() throws IOException
 	{
-		this.out.flush();
+//		this.out.flush();
 	}
 }

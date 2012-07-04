@@ -1,7 +1,9 @@
 package solidstack.nio;
 
+import java.io.OutputStream;
+
 
 public interface RequestWriter
 {
-	void write( ClientSocket socket );
+	ResponseReader write( OutputStream out );
 }

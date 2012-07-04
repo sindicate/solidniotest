@@ -72,17 +72,23 @@ public class RampGenerator
 				while( in.available() > 0 )
 				{
 					int ch = in.read();
-					if( ch == 'a' )
+					if( ch == 'a' || ch == 'A' )
 					{
-						this.goal += 100;
+						if( ch == 'a' )
+							this.goal += 10;
+						else
+							this.goal += 100;
 						rampStartMillis = now; // restart the ramp up
 						rampBaseRate = rate;
 						rampDelta = this.goal - rate;
 						Loggers.nio.debug( "Goal: {}", this.goal );
 					}
-					else if( ch == 'b' )
+					else if( ch == 'b' || ch == 'B' )
 					{
-						this.goal -= 100;
+						if( ch == 'b' )
+							this.goal -= 10;
+						else
+							this.goal -= 100;
 						if( this.goal < 0 )
 							this.goal = 0;
 						rampStartMillis = now; // restart the ramp up

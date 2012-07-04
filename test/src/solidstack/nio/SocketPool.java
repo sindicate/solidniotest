@@ -79,11 +79,12 @@ public class SocketPool
 		if( this.pool == null )
 			return null;
 		ClientSocket result = this.pool.socket;
-		this.pool.socket = null;
-		this.pool = this.pool.previous;
-		if( this.pool == null )
-			this.tail = null;
-		this.pooled --;
+		this.pool.lastPooled = System.currentTimeMillis();
+//		this.pool.socket = null;
+//		this.pool = this.pool.previous;
+//		if( this.pool == null )
+//			this.tail = null;
+//		this.pooled --;
 		Loggers.nio.trace( "Channel ({}) From pool", result.getDebugId() );
 		return result;
 	}

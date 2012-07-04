@@ -25,7 +25,6 @@
 
 	<!-- Product folders -->
 	<property name="build.home" location="../BUILDS/solidniotest" />
-	<property name="temp.home" value="../TEMP/solidniotest" />
 	<property name="dist.home" location="${build.home}/dist" />
 
 
@@ -39,8 +38,7 @@
 	<!-- Targets -->
 
 	<target name="clean" description="Clean out the output directories ">
-		<delete dir="${build.home}" />
-		<delete dir="${temp.home}" />
+		<delete dir="${build.home}" excludes="dist" includeemptydirs="true" />
 	</target>
 
 
