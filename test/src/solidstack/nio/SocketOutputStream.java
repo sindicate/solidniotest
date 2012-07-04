@@ -13,14 +13,14 @@ import solidstack.lang.Assert;
 // TODO Improve performance?
 public class SocketOutputStream extends OutputStream
 {
-	private Socket handler;
+	private Socket socket;
 	private ByteBuffer buffer;
 //	private AtomicBoolean block = new AtomicBoolean();
 	private AtomicReference<Thread> block = new AtomicReference<Thread>();
 
-	public SocketOutputStream( Socket handler )
+	public SocketOutputStream( Socket socket )
 	{
-		this.handler = handler;
+		this.socket = socket;
 		this.buffer = ByteBuffer.allocate( 8192 );
 	}
 
@@ -28,7 +28,7 @@ public class SocketOutputStream extends OutputStream
 	synchronized public void write( int b )
 	{
 		if( !this.block.compareAndSet( null, Thread.currentThread() ) )
-			Assert.fail( "Channel (" + this.handler.getDebugId() + ") " + this.block.get().getName() );
+			Assert.fail( "Channel (" + this.socket.getDebugId() + ") " + this.block.get().getName() );
 
 		Assert.isTrue( this.buffer.hasRemaining() );
 		this.buffer.put( (byte)b );
@@ -46,7 +46,7 @@ public class SocketOutputStream extends OutputStream
 			return;
 
 		if( !this.block.compareAndSet( null, Thread.currentThread() ) )
-			Assert.fail( "Channel (" + this.handler.getDebugId() + ") " + this.block.get().getName() );
+			Assert.fail( "Channel (" + this.socket.getDebugId() + ") " + this.block.get().getName() );
 
 		while( len > 0 )
 		{
@@ -67,7 +67,7 @@ public class SocketOutputStream extends OutputStream
 	synchronized public void flush() throws IOException
 	{
 		if( !this.block.compareAndSet( null, Thread.currentThread() ) )
-			Assert.fail( "Channel (" + this.handler.getDebugId() + ") " + this.block.get().getName() );
+			Assert.fail( "Channel (" + this.socket.getDebugId() + ") " + this.block.get().getName() );
 
 		if( this.buffer.position() > 0 )
 			writeChannel();
@@ -79,7 +79,7 @@ public class SocketOutputStream extends OutputStream
 	synchronized public void close() throws IOException
 	{
 		flush();
-		this.handler.close();
+		this.socket.close();
 	}
 
 	static private void logBuffer( int id, ByteBuffer buffer )
@@ -99,7 +99,7 @@ public class SocketOutputStream extends OutputStream
 
 	private void writeChannel()
 	{
-		SocketChannel channel = this.handler.getChannel();
+		SocketChannel channel = this.socket.getChannel();
 		int id = DebugId.getId( channel );
 
 		Assert.isTrue( channel.isOpen(), "Channel is closed" );
@@ -120,7 +120,7 @@ public class SocketOutputStream extends OutputStream
 					synchronized( this )
 					{
 						// Prevent losing a notify: listenWriter() must be called within the synchronized block
-						this.handler.getMachine().listenWrite( this.handler.getKey() );
+						this.socket.getMachine().listenWrite( this.socket.getKey() );
 						wait();
 					}
 				}
