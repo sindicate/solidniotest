@@ -156,9 +156,11 @@ public class ServerSocket extends Socket implements Runnable, ResponseListener
 	@Override
 	public void run()
 	{
-		SocketInputStream in = getInputStream();
 		try
 		{
+			Loggers.nio.trace( "Channel ({}) Input task started", getDebugId() );
+
+			SocketInputStream in = getInputStream();
 			try
 			{
 				if( in.endOfFile() )
@@ -172,8 +174,6 @@ public class ServerSocket extends Socket implements Runnable, ResponseListener
 				Loggers.nio.debug( "Connection forcibly closed" );
 				return;
 			}
-
-			Loggers.nio.trace( "Channel ({}) Task started", getDebugId() );
 
 			while( true )
 			{
@@ -189,20 +189,21 @@ public class ServerSocket extends Socket implements Runnable, ResponseListener
 
 				if( getInputStream().available() == 0 )
 				{
-					listenRead();
+					endOfRunning();
+					listenRead(); // TODO Are we sure this is now safe? Or should these 2 be atomic?
 					break;
 				}
 
 				Loggers.nio.trace( "Channel ({}) Continue reading", getDebugId() );
 			}
 
-			Loggers.nio.trace( "Channel ({}) Thread complete", getDebugId() );
+			Loggers.nio.trace( "Channel ({}) Input task complete", getDebugId() );
 		}
 		catch( Exception e )
 		{
 			Loggers.nio.debug( "Channel ({}) Unhandled exception", getDebugId(), e );
 			close();
-			Loggers.nio.trace( "Channel ({}) Thread aborted", getDebugId() );
+			Loggers.nio.trace( "Channel ({}) Input task aborted", getDebugId() );
 		}
 		finally
 		{

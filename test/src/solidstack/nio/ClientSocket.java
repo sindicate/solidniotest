@@ -229,12 +229,12 @@ public class ClientSocket extends Socket implements Runnable
 	@Override
 	public void run()
 	{
-		Loggers.nio.trace( "Channel ({}) Input task started", getDebugId() );
-
-		SocketInputStream in = getInputStream();
 		boolean complete = false;
 		try
 		{
+			Loggers.nio.trace( "Channel ({}) Input task started", getDebugId() );
+
+			SocketInputStream in = getInputStream();
 			try
 			{
 				if( in.endOfFile() )
