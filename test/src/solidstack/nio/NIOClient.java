@@ -2,6 +2,7 @@ package solidstack.nio;
 
 import java.net.ConnectException;
 import java.util.LinkedList;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import solidstack.lang.ThreadInterrupted;
 
@@ -18,7 +19,7 @@ public class NIOClient
 	private int maxQueueSize = 10000;
 
 	SocketPool pool = new SocketPool();
-	Integer expand = new Integer( 0 );
+	AtomicInteger expand = new AtomicInteger();
 
 	private LinkedList<RequestWriter> queue = new LinkedList<RequestWriter>();
 	private ConnectingThread thread;
@@ -48,13 +49,11 @@ public class NIOClient
 		{
 			queued = this.queue.size();
 		}
-		return new int[] { pooled[ 0 ], pooled[ 1 ], queued };
+		return new int[] { pooled[ 0 ], pooled[ 1 ], pooled[ 2 ], queued };
 	}
 
-	public void releaseSocket( ClientSocket socket )
+	public void processQueue()
 	{
-		this.pool.release( socket );
-
 		RequestWriter queued = null;
 		synchronized( this.queue )
 		{
@@ -77,12 +76,12 @@ public class NIOClient
 		}
 	}
 
-	public void channelClosed( Socket socket )
+	public void channelClosed( ClientSocket socket )
 	{
 		this.pool.remove( socket );
 	}
 
-	public void channelLost( Socket socket )
+	public void channelLost( ClientSocket socket )
 	{
 		this.pool.remove( socket );
 	}
@@ -99,6 +98,8 @@ public class NIOClient
 		if( socket != null )
 		{
 			socket.request( writer );
+			this.pool.releaseActive( socket );
+			processQueue();
 			return true;
 		}
 
@@ -125,11 +126,12 @@ public class NIOClient
 
 		synchronized( this.expand )
 		{
-			if( this.pool.size() + this.expand < this.maxConnections )
+			if( this.pool.all() + this.expand.get() < this.maxConnections )
 			{
-				if( this.expand == 0 )
+//				Loggers.nio.trace( "Adding socket, pool size = {}, expand = {}", this.pool.all(), this.expand.get() );
+				int val = this.expand.incrementAndGet();
+				if( val == 1 )
 					this.expand.notify();
-				this.expand ++;
 			}
 		}
 
@@ -138,9 +140,11 @@ public class NIOClient
 
 	public void timeout()
 	{
-		this.pool.timeout();
+		// TODO Timeout
+//		this.pool.timeout();
 	}
 
+	// TODO Replace this with a task
 	public class ConnectingThread extends Thread
 	{
 		@Override
@@ -150,14 +154,12 @@ public class NIOClient
 			{
 				while( !isInterrupted() )
 				{
-					int expand;
 					synchronized( NIOClient.this.expand )
 					{
-						if( NIOClient.this.expand == 0 )
+						if( NIOClient.this.expand.get() == 0 )
 							NIOClient.this.expand.wait();
-						expand = NIOClient.this.expand;
 					}
-					if( expand > 0 ) // Check again for spurious notifies
+					if( NIOClient.this.expand.get() > 0 ) // Check again for spurious notifies
 					{
 						try
 						{
@@ -165,17 +167,15 @@ public class NIOClient
 							synchronized( NIOClient.this.expand )
 							{
 								NIOClient.this.pool.add( socket );
-								NIOClient.this.expand --;
+								NIOClient.this.expand.decrementAndGet();
+//								Loggers.nio.trace( "Added socket, pool size = {}, expand = {}", NIOClient.this.pool.all(), NIOClient.this.expand.get() );
 							}
 							socket.setClient( NIOClient.this );
-							releaseSocket( socket );
+							processQueue();
 						}
 						catch( ConnectException e )
 						{
-							synchronized( NIOClient.this.expand )
-							{
-								NIOClient.this.expand = 0;
-							}
+							NIOClient.this.expand.set( 0 );
 							Loggers.nio.error( e.toString() );
 						}
 					}

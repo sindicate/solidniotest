@@ -3,10 +3,9 @@ package solidstack.nio;
 import java.io.IOException;
 import java.util.LinkedList;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
-import solidstack.httpserver.FatalSocketException;
 import solidstack.io.FatalIOException;
-import solidstack.lang.Assert;
 
 
 /**
@@ -16,7 +15,7 @@ import solidstack.lang.Assert;
  */
 public class ClientSocket extends Socket implements Runnable
 {
-	static final private int PIPELINE = 2;
+	static final private int PIPELINE = 10000;
 
 	private NIOClient client;
 
@@ -28,7 +27,7 @@ public class ClientSocket extends Socket implements Runnable
 
 	LinkedList<ResponseReader> readerQueue = new LinkedList<ResponseReader>();
 
-	private int active;
+	private AtomicInteger active = new AtomicInteger();
 
 	public ClientSocket( SocketMachine machine )
 	{
@@ -40,9 +39,14 @@ public class ClientSocket extends Socket implements Runnable
 		this.client = client;
 	}
 
+	public int getActive()
+	{
+		return this.active.get();
+	}
+
 	synchronized public void request( RequestWriter request )
 	{
-		this.active ++;
+		this.active.incrementAndGet();
 
 		if( this.queueRunning )
 		{
@@ -131,11 +135,17 @@ public class ClientSocket extends Socket implements Runnable
 //		acquireRead( reader );
 //	}
 
-	synchronized public void acquireWrite()
+	// TODO Or should we make 'active' volatile?
+	public boolean windowOpen()
 	{
-		Assert.isFalse( this.writing );
-		this.writing = true;
+		return this.active.get() < PIPELINE;
 	}
+
+//	synchronized public void acquireWrite()
+//	{
+//		Assert.isFalse( this.writing );
+//		this.writing = true;
+//	}
 
 //	public void releaseWrite()
 //	{
@@ -235,19 +245,19 @@ public class ClientSocket extends Socket implements Runnable
 			Loggers.nio.trace( "Channel ({}) Input task started", getDebugId() );
 
 			SocketInputStream in = getInputStream();
-			try
-			{
+//			try
+//			{
 				if( in.endOfFile() )
 				{
 					Loggers.nio.debug( "Connection closed" );
 					return;
 				}
-			}
-			catch( FatalSocketException e )
-			{
-				Loggers.nio.debug( "Connection forcibly closed" );
-				return;
-			}
+//			}
+//			catch( FatalSocketException e )
+//			{
+//				Loggers.nio.debug( "Connection forcibly closed" );
+//				return;
+//			}
 
 			while( true )
 			{
@@ -257,7 +267,7 @@ public class ClientSocket extends Socket implements Runnable
 					reader = this.readerQueue.removeFirst();
 				}
 				reader.incoming( this );
-				this.active --;
+				this.active.decrementAndGet();
 
 				if( !isOpen() )
 					return;
