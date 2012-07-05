@@ -2,6 +2,8 @@ package solidstack.nio;
 
 import java.util.Set;
 
+import solidstack.nio.MyLinkedList.Entry;
+
 
 public class SocketPool
 {
@@ -11,6 +13,12 @@ public class SocketPool
 	synchronized public ClientSocket acquire()
 	{
 		ClientSocket socket = this.activePool.peekHead();
+		// FIXME This while may not be needed anymore
+		while( socket != null && !socket.isActive() )
+		{
+			this.activePool.moveHeadTo( this.pool );
+			socket = this.activePool.peekHead();
+		}
 		if( socket != null )
 			if( socket.windowOpen() )
 			{
@@ -36,9 +44,20 @@ public class SocketPool
 		return new int[] { this.pool.all() + this.activePool.all(), this.pool.size() + this.activePool.size(), active };
 	}
 
-	synchronized public void releaseActive( ClientSocket socket )
+//	synchronized public void releaseWrite( ClientSocket socket )
+//	{
+//		this.activePool.unstash( socket );
+//	}
+
+	synchronized public void release( ClientSocket socket )
 	{
-		this.activePool.unstash( socket );
+		if( socket.isActive() )
+		{
+			if( !socket.windowClosed() )
+				this.activePool.unstash( socket );
+		}
+		else
+			this.activePool.moveTo( socket, this.pool );
 	}
 
 	synchronized public void add( ClientSocket socket )
@@ -55,6 +74,17 @@ public class SocketPool
 	synchronized public int all()
 	{
 		return this.pool.all() + this.activePool.all();
+	}
+
+	public void timeout()
+	{
+		Entry<ClientSocket> entry = this.pool.timeout();
+		while( entry != null )
+		{
+			entry.item.poolTimeout();
+			Loggers.nio.trace( "Channel ({}) Timed out from pool", entry.item.getDebugId() );
+			entry = entry.next;
+		}
 	}
 
 //	synchronized public void add( ClientSocket socket )
@@ -154,63 +184,7 @@ public class SocketPool
 //		Assert.isTrue( count == this.pooled );
 //		return new int[] { this.all.size(), this.pooled };
 //	}
-//
-//	public void timeout()
-//	{
-//		long now = System.currentTimeMillis();
-//
-//		Entry tail;
-//		Entry entry;
-//
-//		synchronized( this )
-//		{
-//			tail = this.tail;
-//			entry = tail;
-//
-//			// TODO Maximum number of timeouts per occurrence or use closer thread
-//			while( entry != null && entry.lastPooled + 30000 <= now )
-//				entry = entry.next;
-//
-//			if( entry != null )
-//			{
-//				// entry is the first one that is not timing out
-//				if( entry != tail )
-//				{
-//					this.tail = entry;
-//					entry.previous.next = null;
-//					entry.previous = null;
-//				}
-//				else
-//					tail = null;
-//			}
-//			else
-//			{
-//				// all the entries are timing out, or pool and tail are already null
-//				if( tail != null )
-//					this.pool = this.tail = null;
-//			}
-//
-//			entry = tail;
-//			while( entry != null )
-//			{
-//				Entry e = this.all.remove( entry.socket );
-//				Assert.isTrue( e == entry, e != null ? e.toString() : "null" );
-//				this.pooled --;
-//
-//				entry = entry.next;
-//			}
-//		}
-//
-//		entry = tail;
-//		while( entry != null )
-//		{
-//			entry.socket.poolTimeout();
-//			Loggers.nio.trace( "Channel ({}) Timed out from pool", entry.socket.getDebugId() );
-//			entry.socket = null; // Not in the pool
-//			entry = entry.next;
-//		}
-//	}
-//
+
 //	static class Entry
 //	{
 //		Entry previous;

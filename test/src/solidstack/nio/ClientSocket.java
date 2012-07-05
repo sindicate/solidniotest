@@ -44,6 +44,11 @@ public class ClientSocket extends Socket implements Runnable
 		return this.active.get();
 	}
 
+	public boolean isActive()
+	{
+		return getActive() > 0;
+	}
+
 	synchronized public void request( RequestWriter request )
 	{
 		this.active.incrementAndGet();
@@ -139,6 +144,11 @@ public class ClientSocket extends Socket implements Runnable
 	public boolean windowOpen()
 	{
 		return this.active.get() < PIPELINE;
+	}
+
+	public boolean windowClosed()
+	{
+		return this.active.get() >= PIPELINE;
 	}
 
 //	synchronized public void acquireWrite()
@@ -268,6 +278,7 @@ public class ClientSocket extends Socket implements Runnable
 				}
 				reader.incoming( this );
 				this.active.decrementAndGet();
+				this.client.release( this );
 
 				if( !isOpen() )
 					return;

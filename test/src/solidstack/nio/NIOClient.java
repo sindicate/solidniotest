@@ -98,7 +98,7 @@ public class NIOClient
 		if( socket != null )
 		{
 			socket.request( writer );
-			this.pool.releaseActive( socket );
+			this.pool.release( socket );
 			processQueue();
 			return true;
 		}
@@ -140,8 +140,12 @@ public class NIOClient
 
 	public void timeout()
 	{
-		// TODO Timeout
-//		this.pool.timeout();
+		this.pool.timeout();
+	}
+
+	public void release( ClientSocket socket )
+	{
+		this.pool.release( socket );
 	}
 
 	// TODO Replace this with a task
