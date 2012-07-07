@@ -43,6 +43,11 @@ public class Client
 		this.socket.setMaxConnections( maxConnections );
 	}
 
+	public void setMaxWindowSize( int windowSize )
+	{
+		this.socket.setMaxWindowSize( windowSize );
+	}
+
 	public int[] getCounts()
 	{
 		return this.socket.getCounts();

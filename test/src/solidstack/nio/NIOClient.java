@@ -42,6 +42,11 @@ public class NIOClient
 		this.maxConnections = maxConnections;
 	}
 
+	public void setMaxWindowSize( int windowSize )
+	{
+		this.maxWindowSize = windowSize;
+	}
+
 	public int[] getCounts()
 	{
 		int[] pooled = this.pool.getCounts();
@@ -53,6 +58,7 @@ public class NIOClient
 		return new int[] { pooled[ 0 ], pooled[ 1 ], pooled[ 2 ], queued };
 	}
 
+	// TODO Implement assertions that checks for nesting
 	public void processQueue()
 	{
 		RequestWriter queued = null;
@@ -65,8 +71,14 @@ public class NIOClient
 			Loggers.nio.trace( "Processing request queue" );
 			while( queued != null )
 			{
-				if( !request( queued, true ) )
+				if( !retry( queued ) )
+				{
+					synchronized( this.queue )
+					{
+						this.queue.addFirst( queued );
+					}
 					return;
+				}
 
 				synchronized( this.queue )
 				{
@@ -87,14 +99,9 @@ public class NIOClient
 		this.pool.remove( socket );
 	}
 
-	public void request( RequestWriter writer ) throws ConnectException
+	public boolean request( RequestWriter writer )
 	{
 		Loggers.nio.trace( "Request received" );
-		request( writer, false );
-	}
-
-	private boolean request( RequestWriter writer, boolean existing )
-	{
 		ClientSocket socket = this.pool.acquire();
 		if( socket != null )
 		{
@@ -102,15 +109,6 @@ public class NIOClient
 			this.pool.release( socket );
 			processQueue();
 			return true;
-		}
-
-		if( existing )
-		{
-			synchronized( this.queue )
-			{
-				this.queue.addFirst( writer );
-			}
-			return false;
 		}
 
 		synchronized( this.queue )
@@ -139,6 +137,17 @@ public class NIOClient
 		return false;
 	}
 
+	private boolean retry( RequestWriter writer )
+	{
+		ClientSocket socket = this.pool.acquire();
+		if( socket == null )
+			return false;
+
+		socket.request( writer );
+		this.pool.release( socket );
+		return true;
+	}
+
 	public void timeout()
 	{
 		this.pool.timeout();
@@ -147,6 +156,7 @@ public class NIOClient
 	public void release( ClientSocket socket )
 	{
 		this.pool.release( socket );
+		processQueue();
 	}
 
 	// TODO Replace this with a task

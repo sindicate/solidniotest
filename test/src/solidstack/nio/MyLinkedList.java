@@ -224,7 +224,8 @@ public class MyLinkedList<T>
 		Entry<T> entry = this.head;
 
 		// TODO Maximum number of timeouts per occurrence or use closer thread
-		while( entry != null && entry.lastPooled + 30000 > now )
+		// TODO Max this period configurable
+		while( entry != null && entry.lastPooled + 10000 > now )
 			entry = entry.next;
 		// expired or null
 

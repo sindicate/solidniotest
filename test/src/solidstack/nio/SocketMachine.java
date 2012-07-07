@@ -14,7 +14,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
@@ -55,7 +55,7 @@ public class SocketMachine extends Thread
 		{
 			throw new FatalIOException( e );
 		}
-		this.executor = (ThreadPoolExecutor)Executors.newCachedThreadPool();
+		this.executor = new ThreadPoolExecutor( 0, 16, 60, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>( 1000 ) );
 	}
 
 	synchronized static private int nextId()

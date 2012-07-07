@@ -1,8 +1,9 @@
 package solidstack.nio.test;
 
 import java.net.ConnectException;
-import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 import solidstack.httpclient.Request;
 import solidstack.httpclient.Response;
@@ -19,7 +20,7 @@ public class Runner
 	Client client;
 	Request request;
 	Runnable runnable;
-	private ThreadPoolExecutor executor = (ThreadPoolExecutor)Executors.newCachedThreadPool();
+	private ThreadPoolExecutor executor = new ThreadPoolExecutor( 0, 16, 60, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>() );
 
 	private int started; // TODO Or long
 	private int discarded;
@@ -34,7 +35,8 @@ public class Runner
 		this.machine = machine;
 //		this.client = new Client( "192.168.0.105", 8001, machine );
 		this.client = new Client( "localhost", 8001, machine );
-		this.client.setMaxConnections( 100 );
+		this.client.setMaxConnections( 10 );
+		this.client.setMaxWindowSize( 10000 );
 		this.request = new Request( "/" );
 //		this.request.setHeader( "Host", "www.nu.nl" );
 		this.runnable = new MyRunnable();
@@ -44,7 +46,7 @@ public class Runner
 	{
 //		System.out.println( "triggered " + this.counter++ );
 
-		if( this.executor.getActiveCount() < 200 )
+		if( this.executor.getQueue().size() < 10000 )
 		{
 			this.executor.execute( this.runnable );
 			started();
@@ -57,7 +59,7 @@ public class Runner
 	{
 		int[] sockets = this.client.getCounts();
 //		int[] timeouts = this.client.getTimeouts();
-		Loggers.nio.debug( "Rate: " + rate + ", started: " + this.started + ", discarded: " + this.discarded + ", complete: " + this.completed + ", failed: " + this.failed + ", timeout: " + this.timedOut + ", sockets: " + sockets[ 0 ] + ", pooled: " + sockets[ 1 ] + ", requests: " + sockets[ 2 ] + ", queued: " + sockets[ 3 ] );
+		Loggers.nio.debug( "Rate: " + rate + ", started: " + this.started + ", discarded: " + this.discarded + ", complete: " + this.completed + ", failed: " + this.failed + ", timeout: " + this.timedOut + ", sockets: " + sockets[ 0 ] + ", active: " + sockets[ 1 ] + ", requests: " + sockets[ 2 ] + ", queued: " + sockets[ 3 ] );
 	}
 
 	synchronized public void started()

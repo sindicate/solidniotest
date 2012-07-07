@@ -11,7 +11,7 @@ public class RampGenerator
 {
 	private Runner runner;
 	private int goal;
-	private int rampPeriod = 30000;
+	private int rampPeriod = 15000;
 
 	public void setReceiver( Runner runner )
 	{
