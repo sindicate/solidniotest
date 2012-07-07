@@ -57,6 +57,10 @@ public class SocketInputStream extends InputStream
 	@Override
 	synchronized public int available() throws IOException
 	{
+		int rem = this.buffer.remaining();
+		if( rem > 0 )
+			return rem;
+		readChannelNonBlocking();
 		return this.buffer.remaining();
 	}
 
@@ -76,7 +80,6 @@ public class SocketInputStream extends InputStream
 		Loggers.nio.trace( "Channel (" + id + ") " + new String( bytes, 0, buffer.limit() ) );
 	}
 
-	// TODO What if it read too much? Like when 2 requests are chained. The handler needs to keep reading.
 	private void readChannel()
 	{
 		SocketChannel channel = this.socket.getChannel();
@@ -122,6 +125,38 @@ public class SocketInputStream extends InputStream
 				this.socket = null;
 			}
 			else
+				logBuffer( id, this.buffer );
+		}
+		catch( IOException e )
+		{
+			throw new FatalSocketException( e );
+		}
+	}
+
+	private void readChannelNonBlocking()
+	{
+		SocketChannel channel = this.socket.getChannel();
+		int id = DebugId.getId( channel );
+
+		Assert.isFalse( this.buffer.hasRemaining() );
+		Assert.isTrue( channel.isOpen() );
+
+		this.buffer.clear();
+
+		try
+		{
+			int read = channel.read( this.buffer );
+			if( Loggers.nio.isTraceEnabled() )
+				Loggers.nio.trace( "Channel ({}) read #{} bytes from channel", new Object[] { id, read } );
+
+			this.buffer.flip();
+
+			if( read == -1 )
+			{
+				this.socket.close(); // TODO This should cancel all keys
+				this.socket = null;
+			}
+			else if( read > 0 )
 				logBuffer( id, this.buffer );
 		}
 		catch( IOException e )

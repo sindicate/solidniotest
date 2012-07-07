@@ -156,6 +156,20 @@ public class SocketMachine extends Thread
 		}
 	}
 
+
+	public void dontListenRead( SelectionKey key )
+	{
+		// Only gets called when the selector is not waiting TODO build check for this
+		synchronized( key )
+		{
+			int i = key.interestOps();
+			if( ( i & SelectionKey.OP_READ ) != 0 )
+			{
+				key.interestOps( key.interestOps() ^ SelectionKey.OP_READ );
+			}
+		}
+	}
+
 	public void listenWrite( SelectionKey key )
 	{
 		boolean yes = false;
@@ -343,7 +357,7 @@ public class SocketMachine extends Thread
 //									socket.setReader( serverSocket.getReader() );
 
 									Loggers.nio.trace( "Channel ({}) New channel, Readable", socket.getDebugId() );
-									socket.readReady();
+									socket.readReady(); // TODO Are we sure this is always true?
 								}
 								else
 									Loggers.nio.trace( "Lost accept" );
@@ -359,11 +373,6 @@ public class SocketMachine extends Thread
 							final SocketChannel channel = (SocketChannel)key.channel();
 							if( Loggers.nio.isTraceEnabled() )
 								Loggers.nio.trace( "Channel ({}) Readable", DebugId.getId( channel ) );
-
-							synchronized( key )
-							{
-								key.interestOps( key.interestOps() ^ SelectionKey.OP_READ );
-							}
 
 							Socket socket = (Socket)key.attachment();
 							socket.readReady();

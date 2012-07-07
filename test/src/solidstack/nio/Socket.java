@@ -90,6 +90,11 @@ abstract public class Socket
 		this.machine.listenRead( this.key );
 	}
 
+	public void dontListenRead()
+	{
+		this.machine.dontListenRead( this.key );
+	}
+
 	public boolean isOpen()
 	{
 		return this.key.channel().isOpen();

@@ -17,6 +17,7 @@ public class NIOClient
 
 	private int maxConnections = 100;
 	private int maxQueueSize = 10000;
+	int maxWindowSize = 1000000;
 
 	SocketPool pool = new SocketPool();
 	AtomicInteger expand = new AtomicInteger();
@@ -168,13 +169,14 @@ public class NIOClient
 						try
 						{
 							ClientSocket socket = NIOClient.this.machine.connect( NIOClient.this.hostname, NIOClient.this.port );
+							socket.setClient( NIOClient.this );
+							socket.setMaxWindowSize( NIOClient.this.maxWindowSize );
 							synchronized( NIOClient.this.expand )
 							{
 								NIOClient.this.pool.add( socket );
 								NIOClient.this.expand.decrementAndGet();
 //								Loggers.nio.trace( "Added socket, pool size = {}, expand = {}", NIOClient.this.pool.all(), NIOClient.this.expand.get() );
 							}
-							socket.setClient( NIOClient.this );
 							processQueue();
 						}
 						catch( ConnectException e )

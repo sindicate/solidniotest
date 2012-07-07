@@ -18,7 +18,7 @@ import solidstack.io.FatalIOException;
 public class ServerSocket extends Socket implements Runnable, ResponseListener
 {
 	private NIOServer server;
-	private AtomicBoolean running = new AtomicBoolean();
+	final private AtomicBoolean running = new AtomicBoolean();
 
 	LinkedList<Response> responseQueue = new LinkedList<Response>();
 	boolean queueRunning;
@@ -43,18 +43,26 @@ public class ServerSocket extends Socket implements Runnable, ResponseListener
 	}
 
 	@Override
+	// TODO This is now equal with ClientSocket
 	void readReady()
 	{
-		// Not running -> not waiting -> no notify needed
-		if( !isRunningAndSet() )
+		boolean run = false;
+		synchronized( this.running )
 		{
-//			if( this.server ) TODO We are missing listenRead now which is needed to detect disconnects
-//				acquireRead();
+			dontListenRead();
+			if( !this.running.get() )
+			{
+				this.running.set( true );
+				run = true;
+			}
+		}
+		if( run )
+		{
+			// Not running -> not waiting -> no notify needed
 			getMachine().execute( this ); // TODO Also for write
 			Loggers.nio.trace( "Channel ({}) Started thread", getDebugId() );
 			return;
 		}
-
 		super.readReady();
 	}
 
@@ -143,16 +151,6 @@ public class ServerSocket extends Socket implements Runnable, ResponseListener
 			Loggers.nio.trace( "Channel ({}) Starting response queue", getDebugId() );
 	}
 
-	protected boolean isRunningAndSet()
-	{
-		return !this.running.compareAndSet( false, true );
-	}
-
-	protected void endOfRunning()
-	{
-		this.running.set( false );
-	}
-
 	@Override
 	public void run()
 	{
@@ -187,11 +185,14 @@ public class ServerSocket extends Socket implements Runnable, ResponseListener
 				else
 					throw new UnsupportedOperationException();
 
-				if( getInputStream().available() == 0 )
+				synchronized( this.running )
 				{
-					endOfRunning();
-					listenRead(); // TODO Are we sure this is now safe? Or should these 2 be atomic?
-					break;
+					if( getInputStream().available() == 0 )
+					{
+						this.running.set( false );
+						listenRead(); // TODO Are we sure this is now safe? Or should these 2 be atomic?
+						return;
+					}
 				}
 
 				Loggers.nio.trace( "Channel ({}) Continue reading", getDebugId() );
@@ -204,10 +205,6 @@ public class ServerSocket extends Socket implements Runnable, ResponseListener
 			Loggers.nio.debug( "Channel ({}) Unhandled exception", getDebugId(), e );
 			close();
 			Loggers.nio.trace( "Channel ({}) Input task aborted", getDebugId() );
-		}
-		finally
-		{
-			endOfRunning();
 		}
 	}
 }
