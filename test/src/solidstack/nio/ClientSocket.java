@@ -5,6 +5,7 @@ import java.util.LinkedList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import solidstack.httpserver.FatalSocketException;
 import solidstack.io.FatalIOException;
 
 
@@ -159,7 +160,7 @@ public class ClientSocket extends Socket implements Runnable
 		{
 			// Not running -> not waiting -> no notify needed
 			getMachine().execute( this ); // TODO Also for write
-			Loggers.nio.trace( "Channel ({}) Started thread", getDebugId() );
+			Loggers.nio.trace( "Channel ({}) Started input task", getDebugId() );
 			return;
 		}
 		super.readReady();
@@ -200,19 +201,19 @@ public class ClientSocket extends Socket implements Runnable
 			Loggers.nio.trace( "Channel ({}) Input task started", getDebugId() );
 
 			SocketInputStream in = getInputStream();
-//			try
-//			{
+			try
+			{
 				if( in.endOfFile() )
 				{
 					Loggers.nio.debug( "Connection closed" );
 					return;
 				}
-//			}
-//			catch( FatalSocketException e )
-//			{
-//				Loggers.nio.debug( "Connection forcibly closed" );
-//				return;
-//			}
+			}
+			catch( FatalSocketException e )
+			{
+				Loggers.nio.debug( "Connection forcibly closed" );
+				return;
+			}
 
 			while( true )
 			{
@@ -227,14 +228,15 @@ public class ClientSocket extends Socket implements Runnable
 
 				if( !isOpen() )
 					return;
+
 				synchronized( this.running )
 				{
 //					Loggers.nio.trace( "Channel ({}) run: Running {} = {}", new Object[] { getDebugId(), DebugId.getId( this.running ), this.running.get() } );
 					if( getInputStream().available() == 0 /* && this.coordinator.stop() */ )
 					{
-						complete = true;
 						this.running.set( false );
 						listenRead(); // TODO The socket needs to be reading, otherwise client disconnects do not come through
+						complete = true;
 						return;
 					}
 				}

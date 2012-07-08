@@ -60,7 +60,7 @@ public class ServerSocket extends Socket implements Runnable, ResponseListener
 		{
 			// Not running -> not waiting -> no notify needed
 			getMachine().execute( this ); // TODO Also for write
-			Loggers.nio.trace( "Channel ({}) Started thread", getDebugId() );
+			Loggers.nio.trace( "Channel ({}) Started input task", getDebugId() );
 			return;
 		}
 		super.readReady();
@@ -154,6 +154,7 @@ public class ServerSocket extends Socket implements Runnable, ResponseListener
 	@Override
 	public void run()
 	{
+		boolean complete = false;
 		try
 		{
 			Loggers.nio.trace( "Channel ({}) Input task started", getDebugId() );
@@ -177,13 +178,14 @@ public class ServerSocket extends Socket implements Runnable, ResponseListener
 			{
 				RequestReader reader = this.server.getReader();
 				Response response = reader.incoming( this );
-				if( !isOpen() )
-					break;
 
 				if( !response.needsInput() )
 					add( response );
 				else
 					throw new UnsupportedOperationException();
+
+				if( !isOpen() )
+					return;
 
 				synchronized( this.running )
 				{
@@ -191,20 +193,29 @@ public class ServerSocket extends Socket implements Runnable, ResponseListener
 					{
 						this.running.set( false );
 						listenRead(); // TODO Are we sure this is now safe? Or should these 2 be atomic?
+						complete = true;
 						return;
 					}
 				}
 
 				Loggers.nio.trace( "Channel ({}) Continue reading", getDebugId() );
 			}
-
-			Loggers.nio.trace( "Channel ({}) Input task complete", getDebugId() );
 		}
 		catch( Exception e )
 		{
 			Loggers.nio.debug( "Channel ({}) Unhandled exception", getDebugId(), e );
-			close();
-			Loggers.nio.trace( "Channel ({}) Input task aborted", getDebugId() );
+		}
+		finally
+		{
+			if( !complete )
+			{
+				close();
+				Loggers.nio.trace( "Channel ({}) Input task aborted", getDebugId() );
+			}
+			else
+			{
+				Loggers.nio.trace( "Channel ({}) Input task complete", getDebugId() );
+			}
 		}
 	}
 }

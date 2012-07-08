@@ -77,6 +77,7 @@ public class NIOClient
 					{
 						this.queue.addFirst( queued );
 					}
+					Loggers.nio.trace( "Request re-added to queue" );
 					return;
 				}
 
@@ -101,7 +102,7 @@ public class NIOClient
 
 	public boolean request( RequestWriter writer )
 	{
-		Loggers.nio.trace( "Request received" );
+		Loggers.nio.trace( "Request" );
 		ClientSocket socket = this.pool.acquire();
 		if( socket != null )
 		{

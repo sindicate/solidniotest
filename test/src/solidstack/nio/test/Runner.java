@@ -20,7 +20,7 @@ public class Runner
 	Client client;
 	Request request;
 	Runnable runnable;
-	private ThreadPoolExecutor executor = new ThreadPoolExecutor( 0, 16, 60, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>() );
+	private ThreadPoolExecutor executor;
 
 	private int started; // TODO Or long
 	private int discarded;
@@ -35,11 +35,13 @@ public class Runner
 		this.machine = machine;
 //		this.client = new Client( "192.168.0.105", 8001, machine );
 		this.client = new Client( "localhost", 8001, machine );
-		this.client.setMaxConnections( 10 );
+		this.client.setMaxConnections( 2 );
 		this.client.setMaxWindowSize( 10000 );
 		this.request = new Request( "/" );
 //		this.request.setHeader( "Host", "www.nu.nl" );
 		this.runnable = new MyRunnable();
+		this.executor = new ThreadPoolExecutor( 16, 16, 10, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>() );
+		this.executor.allowCoreThreadTimeOut( true );
 	}
 
 	public void trigger()

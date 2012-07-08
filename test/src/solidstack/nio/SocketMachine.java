@@ -55,7 +55,8 @@ public class SocketMachine extends Thread
 		{
 			throw new FatalIOException( e );
 		}
-		this.executor = new ThreadPoolExecutor( 0, 16, 60, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>( 1000 ) );
+		this.executor = new ThreadPoolExecutor( 16, 16, 10, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>( 1000 ) );
+		this.executor.allowCoreThreadTimeOut( true );
 	}
 
 	synchronized static private int nextId()
@@ -160,13 +161,21 @@ public class SocketMachine extends Thread
 	public void dontListenRead( SelectionKey key )
 	{
 		// Only gets called when the selector is not waiting TODO build check for this
+		boolean yes = false;
 		synchronized( key )
 		{
 			int i = key.interestOps();
 			if( ( i & SelectionKey.OP_READ ) != 0 )
 			{
 				key.interestOps( key.interestOps() ^ SelectionKey.OP_READ );
+				yes = true;
 			}
+		}
+
+		if( yes )
+		{
+			if( Loggers.nio.isTraceEnabled() )
+				Loggers.nio.trace( "Channel ({}) NOT Listening to read", DebugId.getId( key.channel() ) );
 		}
 	}
 
@@ -419,7 +428,7 @@ public class SocketMachine extends Thread
 				if( Loggers.nio.isDebugEnabled() )
 					if( now >= this.nextLogging )
 					{
-						Loggers.nio.debug( "Active count/keys: {}/{}", this.executor.getActiveCount(), this.selector.keys().size() );
+						Loggers.nio.debug( "size/active/queue/completed/keys: {}/{}/{}/{}/{}", new Object[] { this.executor.getPoolSize(), this.executor.getActiveCount(), this.executor.getQueue().size(), this.executor.getCompletedTaskCount(), this.selector.keys().size() } );
 						this.nextLogging = now + 1000;
 					}
 
