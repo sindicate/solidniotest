@@ -164,9 +164,11 @@ public class MyLinkedList<T>
 //	}
 
 	// checked
-	public void moveHeadTo( MyLinkedList<T> other )
+	public T moveHeadTo( MyLinkedList<T> other )
 	{
 		Entry<T> head = this.head;
+		if( head == null )
+			return null;
 
 		this.all.remove( head.item );
 
@@ -179,6 +181,8 @@ public class MyLinkedList<T>
 		head.lastPooled = 0; // TODO Should not be necessary
 
 		other.addHead( head );
+
+		return head.item;
 	}
 
 	// checked

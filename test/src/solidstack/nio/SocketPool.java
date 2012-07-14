@@ -16,16 +16,14 @@ public class SocketPool
 		if( socket != null )
 		{
 			int left = socket.windowLeft();
-			if( left > 0 )
-			{
-				if( left == 1 )
-					this.activePool.stashHead();
-				Loggers.nio.trace( "Channel ({}) From active pool", socket.getDebugId() );
-				return socket;
-			}
+//			Assert.isTrue( left > 0 );
+			if( left <= 1 )
+				this.activePool.stashHead();
+			Loggers.nio.trace( "Channel ({}) From active pool", socket.getDebugId() );
+			return socket;
 		}
 
-		socket = this.pool.moveHeadToStash( this.activePool );
+		socket = this.pool.moveHeadTo( this.activePool ); // TODO If window size is 1, then stash
 		if( socket == null )
 			return null;
 

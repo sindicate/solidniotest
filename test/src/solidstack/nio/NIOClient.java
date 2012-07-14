@@ -95,19 +95,19 @@ public class NIOClient
 
 	public void release( ClientSocket socket )
 	{
-		boolean release = true;
-		while( !socket.windowClosed() )
+		RequestWriter queued = this.queue.poll();
+		if( queued == null )
 		{
-			RequestWriter queued = this.queue.poll();
-			if( queued == null )
-				break;
+			this.pool.release( socket );
+			return;
+		}
 
-			release = false;
+		do
+		{
 			this.queueSize.decrementAndGet();
 			socket.request( queued );
 		}
-		if( release )
-			this.pool.release( socket );
+		while( !socket.windowClosed() && ( queued = this.queue.poll() ) != null );
 	}
 
 	// TODO Replace this with a task

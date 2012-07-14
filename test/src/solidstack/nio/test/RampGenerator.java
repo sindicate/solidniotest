@@ -75,9 +75,9 @@ public class RampGenerator
 					if( ch == 'a' || ch == 'A' )
 					{
 						if( ch == 'a' )
-							this.goal += 100;
-						else
 							this.goal += 1000;
+						else
+							this.goal += 10000;
 						rampStartMillis = now; // restart the ramp up
 						rampBaseRate = rate;
 						rampDelta = this.goal - rate;
@@ -86,9 +86,9 @@ public class RampGenerator
 					else if( ch == 'b' || ch == 'B' )
 					{
 						if( ch == 'b' )
-							this.goal -= 100;
-						else
 							this.goal -= 1000;
+						else
+							this.goal -= 10000;
 						if( this.goal < 0 )
 							this.goal = 0;
 						rampStartMillis = now; // restart the ramp up
