@@ -13,19 +13,17 @@ public class SocketPool
 	synchronized public ClientSocket acquire()
 	{
 		ClientSocket socket = this.activePool.peekHead();
-		// FIXME This while may not be needed anymore
-		while( socket != null && !socket.isActive() )
-		{
-			this.activePool.moveHeadTo( this.pool );
-			socket = this.activePool.peekHead();
-		}
 		if( socket != null )
-			if( socket.windowOpen() )
+		{
+			int left = socket.windowLeft();
+			if( left > 0 )
 			{
-				this.activePool.stashHead();
+				if( left == 1 )
+					this.activePool.stashHead();
 				Loggers.nio.trace( "Channel ({}) From active pool", socket.getDebugId() );
 				return socket;
 			}
+		}
 
 		socket = this.pool.moveHeadToStash( this.activePool );
 		if( socket == null )
@@ -43,11 +41,6 @@ public class SocketPool
 			active += socket.getActive();
 		return new int[] { this.pool.all() + this.activePool.all(), this.activePool.all(), active };
 	}
-
-//	synchronized public void releaseWrite( ClientSocket socket )
-//	{
-//		this.activePool.unstash( socket );
-//	}
 
 	synchronized public void release( ClientSocket socket )
 	{

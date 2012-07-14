@@ -132,9 +132,9 @@ public class ClientSocket extends Socket implements Runnable
 		} );
 	}
 
-	public boolean windowOpen()
+	public int windowLeft()
 	{
-		return this.active.get() < this.maxWindowSize;
+		return this.maxWindowSize - this.active.get();
 	}
 
 	public boolean windowClosed()
