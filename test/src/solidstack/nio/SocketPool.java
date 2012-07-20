@@ -10,7 +10,7 @@ public class SocketPool
 	private MyLinkedList<ClientSocket> pool = new MyLinkedList<ClientSocket>();
 	private MyLinkedList<ClientSocket> activePool = new MyLinkedList<ClientSocket>();
 
-	synchronized public ClientSocket acquire()
+	public ClientSocket acquire()
 	{
 		ClientSocket socket = this.activePool.peekHead();
 		if( socket != null )
@@ -31,7 +31,7 @@ public class SocketPool
 		return socket;
 	}
 
-	synchronized public int[] getCounts()
+	public int[] getCounts()
 	{
 		Set<ClientSocket> sockets = this.activePool.getAll();
 		int active = 0;
@@ -40,7 +40,7 @@ public class SocketPool
 		return new int[] { this.pool.all() + this.activePool.all(), this.activePool.all(), active };
 	}
 
-	synchronized public void release( ClientSocket socket )
+	public void release( ClientSocket socket )
 	{
 		if( socket.isActive() )
 		{
@@ -51,22 +51,23 @@ public class SocketPool
 			this.activePool.moveTo( socket, this.pool );
 	}
 
-	synchronized public void add( ClientSocket socket )
+	public void add( ClientSocket socket )
 	{
 		this.pool.addHead( socket );
 	}
 
-	synchronized public void remove( ClientSocket socket )
+	public void remove( ClientSocket socket )
 	{
 		this.pool.remove( socket );
 		this.activePool.remove( socket );
 	}
 
-	synchronized public int all()
+	public int all()
 	{
 		return this.pool.all() + this.activePool.all();
 	}
 
+	// TODO This one was missing synchronized
 	public void timeout()
 	{
 		Entry<ClientSocket> entry = this.pool.timeout();
