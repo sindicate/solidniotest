@@ -157,33 +157,6 @@ public class NIOClient
 //		}
 	}
 
-//	// TODO There is something wrong here, multiple releases for one socket
-//	public void release( ClientSocket socket )
-//	{
-//		RequestWriter queued;
-//		synchronized( this.pool )
-//		{
-//			queued = this.queue.poll();
-//			if( queued == null )
-//			{
-//				this.pool.release( socket );
-//				return;
-//			}
-//		}
-//		socket.request( queued );
-//
-//		while( !socket.windowClosed() )
-//		{
-//			synchronized( this.pool )
-//			{
-//				queued = this.queue.poll();
-//				if( queued == null )
-//					return;
-//			}
-//			socket.request( queued );
-//		}
-//	}
-
 	// TODO Replace this with a task
 	public class ConnectingThread extends Thread
 	{

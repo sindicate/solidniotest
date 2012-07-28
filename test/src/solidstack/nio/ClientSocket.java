@@ -3,7 +3,6 @@ package solidstack.nio;
 import java.io.IOException;
 import java.util.LinkedList;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import solidstack.httpserver.FatalSocketException;
 import solidstack.io.FatalIOException;
@@ -23,9 +22,6 @@ public class ClientSocket extends Socket implements Runnable
 
 	LinkedList<ResponseReader> readerQueue = new LinkedList<ResponseReader>();
 
-	AtomicInteger active = new AtomicInteger();
-
-
 
 	public ClientSocket( SocketMachine machine )
 	{
@@ -42,9 +38,9 @@ public class ClientSocket extends Socket implements Runnable
 		this.maxWindowSize = windowSize;
 	}
 
-	public int getActive()
+	synchronized public int getActive()
 	{
-		return this.active.get();
+		return this.readerQueue.size();
 	}
 
 	public boolean isActive()
@@ -63,7 +59,7 @@ public class ClientSocket extends Socket implements Runnable
 				boolean complete = false;
 				try
 				{
-					while( getActive() < ClientSocket.this.maxWindowSize )
+					while( true )
 					{
 						RequestWriter writer;
 						synchronized( ClientSocket.this )
@@ -84,14 +80,20 @@ public class ClientSocket extends Socket implements Runnable
 								return;
 							}
 						}
-						ClientSocket.this.active.incrementAndGet();
-						ResponseOutputStream out = new ResponseOutputStream( getOutputStream() );
-						Loggers.nio.trace( "Channel ({}) Writing request", getDebugId() );
-						ResponseReader reader = writer.write( out );
+
+						ResponseReader reader = writer.getResponseReader();
+						boolean full;
 						synchronized( ClientSocket.this )
 						{
-							ClientSocket.this.readerQueue.add( reader ); // FIXME This may be too late, response may have come back already
+							ClientSocket.this.readerQueue.add( reader );
+							full = ClientSocket.this.readerQueue.size() >= ClientSocket.this.maxWindowSize;
+							if( full )
+								ClientSocket.this.client.socketWriteFull( ClientSocket.this );
 						}
+
+						ResponseOutputStream out = new ResponseOutputStream( getOutputStream() );
+						Loggers.nio.trace( "Channel ({}) Writing request", getDebugId() );
+						writer.write( out );
 						try
 						{
 							out.close(); // Need close() for the chunkedoutputstream
@@ -100,9 +102,13 @@ public class ClientSocket extends Socket implements Runnable
 						{
 							throw new FatalIOException( e );
 						}
+
+						if( full )
+						{
+							complete = true;
+							return;
+						}
 					}
-					ClientSocket.this.client.socketWriteFull( ClientSocket.this ); // FIXME This is too late, responses may have come back already
-					complete = true;
 				}
 				finally
 				{
@@ -114,14 +120,16 @@ public class ClientSocket extends Socket implements Runnable
 		} );
 	}
 
+	// TODO Not used
 	public int windowLeft()
 	{
-		return this.maxWindowSize - this.active.get();
+		return 0;
 	}
 
+	// TODO Not used
 	public boolean windowClosed()
 	{
-		return this.active.get() >= this.maxWindowSize;
+		return false;
 	}
 
 	@Override
@@ -202,14 +210,16 @@ public class ClientSocket extends Socket implements Runnable
 				ResponseReader reader;
 				synchronized( this )
 				{
+					boolean full = ClientSocket.this.readerQueue.size() == ClientSocket.this.maxWindowSize;
 					reader = this.readerQueue.removeFirst();
+					// FIXME When window size is 1, socketGotAir is never called
+					if( ClientSocket.this.readerQueue.isEmpty() )
+						ClientSocket.this.client.socketFinished( ClientSocket.this );
+					else if( full )
+						ClientSocket.this.client.socketGotAir( ClientSocket.this );
 				}
+
 				reader.incoming( this );
-				int val = this.active.decrementAndGet();
-				if( val + 1 == this.maxWindowSize )
-					this.client.socketGotAir( this );
-				else if( val == 0 )
-					this.client.socketFinished( this );
 
 				if( !isOpen() )
 					return;

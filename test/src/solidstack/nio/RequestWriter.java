@@ -5,5 +5,6 @@ import java.io.OutputStream;
 
 public interface RequestWriter
 {
-	ResponseReader write( OutputStream out );
+	ResponseReader getResponseReader();
+	void write( OutputStream out );
 }

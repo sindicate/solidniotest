@@ -63,13 +63,18 @@ public class Client
 		this.socket.request( new RequestWriter()
 		{
 			@Override
-			public ResponseReader write( OutputStream out )
+			public ResponseReader getResponseReader()
+			{
+				return new MyResponseReader( processor );
+			}
+
+			@Override
+			public void write( OutputStream out )
 			{
 				// TODO Add timeout back
 //				Client.this.machine.addTimeout( reader, Client.this.socket, System.currentTimeMillis() + 10000 );
 
 				sendRequest( request, out );
-				return new MyResponseReader( processor );
 			}
 		} );
 	}
