@@ -21,6 +21,7 @@ public class NIOClient
 	private int maxQueueSize = 100000;
 	int maxWindowSize = 1000000;
 
+	List< ClientSocket > idle = new ArrayList<ClientSocket>();
 	List< ClientSocket > writeable = new ArrayList<ClientSocket>();
 	List< ClientSocket > writing = new ArrayList<ClientSocket>();
 	List< ClientSocket > full = new ArrayList<ClientSocket>();
@@ -55,32 +56,23 @@ public class NIOClient
 		this.maxWindowSize = windowSize;
 	}
 
-	public int[] getCounts()
+	synchronized public int[] getCounts()
 	{
-//		synchronized( this.pool )
-//		{
-//			int[] pooled = this.pool.getCounts();
-//			int queued = this.queue.size();
-//		return new int[] { pooled[ 0 ], pooled[ 1 ], pooled[ 2 ], queued };
-//		}
-		return new int[] { 0, 0, 0, 0 };
-	}
+		for( ClientSocket socket : this.idle )
+			Assert.isTrue( socket.getActive() == 0 );
 
-//	public void channelClosed( ClientSocket socket )
-//	{
-//		synchronized( this.pool )
-//		{
-//			this.pool.remove( socket );
-//		}
-//	}
-//
-//	public void channelLost( ClientSocket socket )
-//	{
-//		synchronized( this.pool )
-//		{
-//			this.pool.remove( socket );
-//		}
-//	}
+		int active = this.writeable.size() + this.writing.size() + this.full.size();
+
+		int requests = 0;
+		for( ClientSocket socket : this.writeable )
+			requests += socket.getActive();
+		for( ClientSocket socket : this.writing )
+			requests += socket.getActive();
+		for( ClientSocket socket : this.full )
+			requests += socket.getActive();
+
+		return new int[] { this.idle.size() + active, active, requests, this.queue.size() };
+	}
 
 	synchronized public void socketWriteComplete( ClientSocket socket )
 	{
@@ -102,15 +94,25 @@ public class NIOClient
 
 	synchronized public void socketClosed( ClientSocket socket )
 	{
-		Assert.isTrue( this.writeable.remove( socket ) || this.writing.remove( socket ) || this.full.remove( socket ) );
+		Assert.isTrue( this.idle.remove( socket ) || this.writeable.remove( socket ) || this.writing.remove( socket ) || this.full.remove( socket ) );
 	}
 
 	synchronized public void socketGotAir( ClientSocket socket )
 	{
 		Assert.isTrue( this.full.remove( socket ) );
+		if( this.queue.isEmpty() )
+			this.writeable.add( socket );
+		else
+		{
+			this.writing.add( socket );
+			socket.asyncProcessWriteQueue();
+		}
+	}
 
-		this.writing.add( socket );
-		socket.asyncProcessWriteQueue();
+	synchronized public void socketFinished( ClientSocket socket )
+	{
+		if( this.writeable.remove( socket ) )
+			this.idle.add( socket );
 	}
 
 	public void request( RequestWriter writer )
@@ -121,15 +123,21 @@ public class NIOClient
 		synchronized( this )
 		{
 			if( this.queue.size() >= this.maxQueueSize )
-				throw new TooManyConnectionsException( "Queue is full" );
+				throw new RequestQueueFullException();
 			this.queue.add( writer );
 
-			if( this.writing.size() > 0 )
+			if( this.writing.size() > 0 ) // FIXME But what if the writing socket already decided to end?
 				return;
 
 			if( this.writeable.size() > 0 )
 			{
 				ClientSocket socket = this.writeable.remove( 0 );
+				this.writing.add( socket );
+				socket.asyncProcessWriteQueue();
+			}
+			else if( this.idle.size() > 0 )
+			{
+				ClientSocket socket = this.idle.remove( 0 );
 				this.writing.add( socket );
 				socket.asyncProcessWriteQueue();
 			}
@@ -191,7 +199,7 @@ public class NIOClient
 					int all;
 					synchronized( NIOClient.this )
 					{
-						all = NIOClient.this.writeable.size() + NIOClient.this.writing.size() + NIOClient.this.full.size();
+						all = NIOClient.this.idle.size() + NIOClient.this.writeable.size() + NIOClient.this.writing.size() + NIOClient.this.full.size();
 					}
 					if( all < NIOClient.this.maxConnections )
 						try

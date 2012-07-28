@@ -11,7 +11,7 @@ import solidstack.httpclient.ResponseProcessor;
 import solidstack.httpclient.nio.Client;
 import solidstack.nio.Loggers;
 import solidstack.nio.SocketMachine;
-import solidstack.nio.TooManyConnectionsException;
+import solidstack.nio.RequestQueueFullException;
 
 public class Runner
 {
@@ -118,7 +118,7 @@ public class Runner
 				failed();
 				Loggers.nio.debug( e.getMessage() );
 			}
-			catch( TooManyConnectionsException e )
+			catch( RequestQueueFullException e )
 			{
 				failed();
 			}

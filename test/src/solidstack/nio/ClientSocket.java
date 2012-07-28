@@ -23,7 +23,7 @@ public class ClientSocket extends Socket implements Runnable
 
 	LinkedList<ResponseReader> readerQueue = new LinkedList<ResponseReader>();
 
-	private AtomicInteger active = new AtomicInteger();
+	AtomicInteger active = new AtomicInteger();
 
 
 
@@ -90,7 +90,7 @@ public class ClientSocket extends Socket implements Runnable
 						ResponseReader reader = writer.write( out );
 						synchronized( ClientSocket.this )
 						{
-							ClientSocket.this.readerQueue.add( reader );
+							ClientSocket.this.readerQueue.add( reader ); // FIXME This may be too late, response may have come back already
 						}
 						try
 						{
@@ -101,7 +101,7 @@ public class ClientSocket extends Socket implements Runnable
 							throw new FatalIOException( e );
 						}
 					}
-					ClientSocket.this.client.socketWriteFull( ClientSocket.this );
+					ClientSocket.this.client.socketWriteFull( ClientSocket.this ); // FIXME This is too late, responses may have come back already
 					complete = true;
 				}
 				finally
@@ -206,8 +206,10 @@ public class ClientSocket extends Socket implements Runnable
 				}
 				reader.incoming( this );
 				int val = this.active.decrementAndGet();
-				if( val + 1 >= this.maxWindowSize )
+				if( val + 1 == this.maxWindowSize )
 					this.client.socketGotAir( this );
+				else if( val == 0 )
+					this.client.socketFinished( this );
 
 				if( !isOpen() )
 					return;
