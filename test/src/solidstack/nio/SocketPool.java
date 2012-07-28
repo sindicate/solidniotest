@@ -31,6 +31,11 @@ public class SocketPool
 		return socket;
 	}
 
+	public ClientSocket activateSocket()
+	{
+		return this.pool.moveHeadTo( this.activePool );
+	}
+
 	public int[] getCounts()
 	{
 		Set<ClientSocket> sockets = this.activePool.getAll();

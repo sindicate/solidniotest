@@ -1,8 +1,11 @@
 package solidstack.nio;
 
 import java.net.ConnectException;
+import java.util.ArrayList;
 import java.util.LinkedList;
+import java.util.List;
 
+import solidstack.lang.Assert;
 import solidstack.lang.ThreadInterrupted;
 
 
@@ -18,11 +21,17 @@ public class NIOClient
 	private int maxQueueSize = 100000;
 	int maxWindowSize = 1000000;
 
+	List< ClientSocket > writeable = new ArrayList<ClientSocket>();
+	List< ClientSocket > writing = new ArrayList<ClientSocket>();
+	List< ClientSocket > full = new ArrayList<ClientSocket>();
+
 	// Synchronized together
-	SocketPool pool = new SocketPool();
+//	SocketPool pool = new SocketPool();
 	private LinkedList<RequestWriter> queue = new LinkedList<RequestWriter>();
 
 	private ConnectingThread thread;
+
+//	private boolean running;
 
 	public NIOClient( String hostname, int port, SocketMachine machine )
 	{
@@ -48,95 +57,124 @@ public class NIOClient
 
 	public int[] getCounts()
 	{
-		synchronized( this.pool )
-		{
-			int[] pooled = this.pool.getCounts();
-			int queued = this.queue.size();
-			return new int[] { pooled[ 0 ], pooled[ 1 ], pooled[ 2 ], queued };
-		}
+//		synchronized( this.pool )
+//		{
+//			int[] pooled = this.pool.getCounts();
+//			int queued = this.queue.size();
+//		return new int[] { pooled[ 0 ], pooled[ 1 ], pooled[ 2 ], queued };
+//		}
+		return new int[] { 0, 0, 0, 0 };
 	}
 
-	public void channelClosed( ClientSocket socket )
+//	public void channelClosed( ClientSocket socket )
+//	{
+//		synchronized( this.pool )
+//		{
+//			this.pool.remove( socket );
+//		}
+//	}
+//
+//	public void channelLost( ClientSocket socket )
+//	{
+//		synchronized( this.pool )
+//		{
+//			this.pool.remove( socket );
+//		}
+//	}
+
+	synchronized public void socketWriteComplete( ClientSocket socket )
 	{
-		synchronized( this.pool )
-		{
-			this.pool.remove( socket );
-		}
+		Assert.isTrue( this.writing.remove( socket ) );
+		this.writeable.add( socket );
 	}
 
-	public void channelLost( ClientSocket socket )
+	synchronized public void socketWriteFull( ClientSocket socket )
 	{
-		synchronized( this.pool )
-		{
-			this.pool.remove( socket );
-		}
+		Assert.isTrue( this.writing.remove( socket ) );
+		this.full.add( socket );
 	}
 
-	public boolean request( RequestWriter writer )
+	synchronized public void socketWriteError( ClientSocket socket )
+	{
+		Assert.isTrue( this.writing.remove( socket ) );
+		socket.doClose();
+	}
+
+	synchronized public void socketClosed( ClientSocket socket )
+	{
+		Assert.isTrue( this.writeable.remove( socket ) || this.writing.remove( socket ) || this.full.remove( socket ) );
+	}
+
+	synchronized public void socketGotAir( ClientSocket socket )
+	{
+		Assert.isTrue( this.full.remove( socket ) );
+
+		this.writing.add( socket );
+		socket.asyncProcessWriteQueue();
+	}
+
+	public void request( RequestWriter writer )
 	{
 		Loggers.nio.trace( "Request" );
 
-		ClientSocket socket;
-		synchronized( this.pool )
+		// Add to queue
+		synchronized( this )
 		{
-			socket = this.pool.acquire();
-			if( socket == null )
+			if( this.queue.size() >= this.maxQueueSize )
+				throw new TooManyConnectionsException( "Queue is full" );
+			this.queue.add( writer );
+
+			if( this.writing.size() > 0 )
+				return;
+
+			if( this.writeable.size() > 0 )
 			{
-				if( this.queue.size() >= this.maxQueueSize )
-					throw new TooManyConnectionsException( "Queue is full" );
-				this.queue.add( writer );
+				ClientSocket socket = this.writeable.remove( 0 );
+				this.writing.add( socket );
+				socket.asyncProcessWriteQueue();
 			}
 		}
+	}
 
-		if( socket != null )
-		{
-			socket.request( writer );
-			return true;
-		}
-
-		Loggers.nio.trace( "Request added to queue" );
-
-		// TODO Maybe the pool should make the connections
-		// TODO Maybe we need a queue and the pool executes the queue when a connection is released
-		// FIXME This if should be synchronized
-
-		return false;
+	synchronized public RequestWriter popRequest()
+	{
+		return this.queue.pollFirst();
 	}
 
 	public void timeout()
 	{
-		synchronized( this.pool )
-		{
-			this.pool.timeout();
-		}
+//		synchronized( this.pool )
+//		{
+//			this.pool.timeout();
+//		}
 	}
 
-	// TODO There is something wrong here, multiple releases for one socket
-	public void release( ClientSocket socket )
-	{
-		RequestWriter queued;
-		synchronized( this.pool )
-		{
-			queued = this.queue.poll();
-			if( queued == null )
-			{
-				this.pool.release( socket );
-				return;
-			}
-		}
-		socket.request( queued );
-
-		while( !socket.windowClosed() )
-		{
-			synchronized( this.pool )
-			{
-				queued = this.queue.poll();
-				if( queued == null )
-					return;
-			}
-			socket.request( queued );
-		}
-	}
+//	// TODO There is something wrong here, multiple releases for one socket
+//	public void release( ClientSocket socket )
+//	{
+//		RequestWriter queued;
+//		synchronized( this.pool )
+//		{
+//			queued = this.queue.poll();
+//			if( queued == null )
+//			{
+//				this.pool.release( socket );
+//				return;
+//			}
+//		}
+//		socket.request( queued );
+//
+//		while( !socket.windowClosed() )
+//		{
+//			synchronized( this.pool )
+//			{
+//				queued = this.queue.poll();
+//				if( queued == null )
+//					return;
+//			}
+//			socket.request( queued );
+//		}
+//	}
 
 	// TODO Replace this with a task
 	public class ConnectingThread extends Thread
@@ -146,24 +184,29 @@ public class NIOClient
 		{
 			try
 			{
+				Loggers.nio.debug( "Connecting thread started" );
+
 				while( !isInterrupted() )
 				{
 					int all;
-					synchronized( NIOClient.this.pool )
+					synchronized( NIOClient.this )
 					{
-						all = NIOClient.this.pool.all();
+						all = NIOClient.this.writeable.size() + NIOClient.this.writing.size() + NIOClient.this.full.size();
 					}
 					if( all < NIOClient.this.maxConnections )
 						try
 						{
+							Loggers.nio.debug( "Connecting..." );
 							ClientSocket socket = NIOClient.this.machine.connect( NIOClient.this.hostname, NIOClient.this.port );
+							Loggers.nio.debug( "New socket connected" );
 							socket.setClient( NIOClient.this );
 							socket.setMaxWindowSize( NIOClient.this.maxWindowSize );
-							synchronized( NIOClient.this.pool )
+							synchronized( NIOClient.this )
 							{
-								NIOClient.this.pool.add( socket );
+								NIOClient.this.writing.add( socket );
 							}
-							release( socket ); // TODO Possible to do this outside the synchronized block? Or remove this synchronized block?
+							socket.asyncProcessWriteQueue();
+//							release( socket ); // TODO Possible to do this outside the synchronized block? Or remove this synchronized block?
 //							Loggers.nio.trace( "Added socket, pool size = {}, expand = {}", NIOClient.this.pool.all(), NIOClient.this.expand.get() );
 						}
 						catch( ConnectException e )
@@ -176,6 +219,10 @@ public class NIOClient
 			catch( InterruptedException e )
 			{
 				throw new ThreadInterrupted();
+			}
+			finally
+			{
+				Loggers.nio.debug( "Connecting thread stopped" );
 			}
 		}
 	}

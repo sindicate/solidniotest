@@ -102,10 +102,10 @@ abstract public class Socket
 
 	public void close()
 	{
-		close0();
+		doClose();
 	}
 
-	private void close0()
+	void doClose()
 	{
 		this.key.cancel();
 		if( isOpen() )

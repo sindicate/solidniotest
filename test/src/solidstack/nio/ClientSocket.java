@@ -16,13 +16,10 @@ import solidstack.io.FatalIOException;
  */
 public class ClientSocket extends Socket implements Runnable
 {
-	private NIOClient client;
-	private int maxWindowSize = 1;
+	NIOClient client;
+	int maxWindowSize = 4;
 
 	final private AtomicBoolean running = new AtomicBoolean();
-
-	LinkedList<RequestWriter> writerQueue = new LinkedList<RequestWriter>();
-	boolean queueRunning;
 
 	LinkedList<ResponseReader> readerQueue = new LinkedList<ResponseReader>();
 
@@ -55,26 +52,8 @@ public class ClientSocket extends Socket implements Runnable
 		return getActive() > 0;
 	}
 
-	synchronized public void request( RequestWriter request )
+	public void asyncProcessWriteQueue()
 	{
-		this.active.incrementAndGet();
-
-		if( this.queueRunning )
-		{
-			this.writerQueue.addLast( request );
-			return;
-		}
-		this.queueRunning = true;
-
-		RequestWriter w;
-		if( this.writerQueue.isEmpty() )
-			w = request;
-		else
-		{
-			this.writerQueue.addLast( request );
-			w = this.writerQueue.removeFirst();
-		}
-		final RequestWriter firstWriter = w;
 		getMachine().execute( new Runnable()
 		{
 			@Override
@@ -84,9 +63,28 @@ public class ClientSocket extends Socket implements Runnable
 				boolean complete = false;
 				try
 				{
-					RequestWriter writer = firstWriter;
-					while( true )
+					while( getActive() < ClientSocket.this.maxWindowSize )
 					{
+						RequestWriter writer;
+						synchronized( ClientSocket.this )
+						{
+							writer = ClientSocket.this.client.popRequest();
+							if( writer == null )
+							{
+								try
+								{
+									getOutputStream().flush(); // TODO Is this ok?
+								}
+								catch( IOException e )
+								{
+									throw new FatalIOException( e );
+								}
+								ClientSocket.this.client.socketWriteComplete( ClientSocket.this );
+								complete = true;
+								return;
+							}
+						}
+						ClientSocket.this.active.incrementAndGet();
 						ResponseOutputStream out = new ResponseOutputStream( getOutputStream() );
 						Loggers.nio.trace( "Channel ({}) Writing request", getDebugId() );
 						ResponseReader reader = writer.write( out );
@@ -102,30 +100,14 @@ public class ClientSocket extends Socket implements Runnable
 						{
 							throw new FatalIOException( e );
 						}
-						synchronized( ClientSocket.this )
-						{
-							writer = ClientSocket.this.writerQueue.pollFirst();
-							if( writer == null )
-							{
-								complete = true;
-								try
-								{
-									getOutputStream().flush(); // TODO Is this ok?
-								}
-								catch( IOException e )
-								{
-									throw new FatalIOException( e );
-								}
-								ClientSocket.this.queueRunning = false;
-								return;
-							}
-						}
 					}
+					ClientSocket.this.client.socketWriteFull( ClientSocket.this );
+					complete = true;
 				}
 				finally
 				{
 					if( !complete )
-						close(); // TODO What about synchronized?
+						ClientSocket.this.client.socketWriteError( ClientSocket.this );
 					Loggers.nio.trace( "Channel ({}) Ended request queue", getDebugId() );
 				}
 			}
@@ -170,14 +152,14 @@ public class ClientSocket extends Socket implements Runnable
 	public void close()
 	{
 		super.close();
-		this.client.channelClosed( this );
+		this.client.socketClosed( this );
 	}
 
-	void lost()
-	{
-		super.close();
-		this.client.channelLost( this );
-	}
+//	void lost()
+//	{
+//		super.close();
+//		this.client.channelLost( this );
+//	}
 
 	void poolTimeout()
 	{
@@ -223,8 +205,9 @@ public class ClientSocket extends Socket implements Runnable
 					reader = this.readerQueue.removeFirst();
 				}
 				reader.incoming( this );
-				this.active.decrementAndGet();
-				this.client.release( this );
+				int val = this.active.decrementAndGet();
+				if( val + 1 >= this.maxWindowSize )
+					this.client.socketGotAir( this );
 
 				if( !isOpen() )
 					return;

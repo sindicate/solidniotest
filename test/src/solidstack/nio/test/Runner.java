@@ -33,7 +33,7 @@ public class Runner
 	public Runner( SocketMachine machine )
 	{
 		this.machine = machine;
-		this.client = new Client( "192.168.0.100", 8001, machine );
+		this.client = new Client( "192.168.0.102", 8001, machine );
 //		this.client = new Client( "192.168.0.105", 8001, machine );
 //		this.client = new Client( "localhost", 8001, machine );
 		this.client.setMaxConnections( 4 );
