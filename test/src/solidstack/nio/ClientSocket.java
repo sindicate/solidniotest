@@ -21,6 +21,7 @@ public class ClientSocket extends Socket implements Runnable
 	final private AtomicBoolean running = new AtomicBoolean();
 
 	LinkedList<ResponseReader> readerQueue = new LinkedList<ResponseReader>();
+	volatile int readerQueueSize;
 
 
 	public ClientSocket( SocketMachine machine )
@@ -38,14 +39,9 @@ public class ClientSocket extends Socket implements Runnable
 		this.maxWindowSize = windowSize;
 	}
 
-	synchronized public int getActive()
+	int getActive()
 	{
-		return this.readerQueue.size();
-	}
-
-	public boolean isActive()
-	{
-		return getActive() > 0;
+		return this.readerQueueSize;
 	}
 
 	public void asyncProcessWriteQueue()
@@ -86,7 +82,7 @@ public class ClientSocket extends Socket implements Runnable
 						synchronized( ClientSocket.this )
 						{
 							ClientSocket.this.readerQueue.add( reader );
-							full = ClientSocket.this.readerQueue.size() >= ClientSocket.this.maxWindowSize;
+							full = ++ClientSocket.this.readerQueueSize >= ClientSocket.this.maxWindowSize;
 							if( full )
 								ClientSocket.this.client.socketWriteFull( ClientSocket.this );
 						}
@@ -185,75 +181,82 @@ public class ClientSocket extends Socket implements Runnable
 	@Override
 	public void run()
 	{
-		boolean complete = false;
 		try
 		{
-			Loggers.nio.trace( "Channel ({}) Input task started", getDebugId() );
-
-			SocketInputStream in = getInputStream();
+			boolean complete = false;
 			try
 			{
-				if( in.endOfFile() )
+				Loggers.nio.trace( "Channel ({}) Input task started", getDebugId() );
+
+				SocketInputStream in = getInputStream();
+				try
 				{
-					Loggers.nio.debug( "Connection closed" );
-					return;
-				}
-			}
-			catch( FatalSocketException e )
-			{
-				Loggers.nio.debug( "Connection forcibly closed" );
-				return;
-			}
-
-			while( true )
-			{
-				ResponseReader reader;
-				synchronized( this )
-				{
-					boolean full = ClientSocket.this.readerQueue.size() == ClientSocket.this.maxWindowSize;
-					reader = this.readerQueue.removeFirst();
-					// FIXME When window size is 1, socketGotAir is never called
-					if( ClientSocket.this.readerQueue.isEmpty() )
-						ClientSocket.this.client.socketFinished( ClientSocket.this );
-					else if( full )
-						ClientSocket.this.client.socketGotAir( ClientSocket.this );
-				}
-
-				reader.incoming( this );
-
-				if( !isOpen() )
-					return;
-
-				synchronized( this.running )
-				{
-//					Loggers.nio.trace( "Channel ({}) run: Running {} = {}", new Object[] { getDebugId(), DebugId.getId( this.running ), this.running.get() } );
-					if( getInputStream().available() == 0 /* && this.coordinator.stop() */ )
+					if( in.endOfFile() )
 					{
-						this.running.set( false );
-						listenRead(); // TODO The socket needs to be reading, otherwise client disconnects do not come through
-						complete = true;
+						Loggers.nio.debug( "Connection closed" );
 						return;
 					}
 				}
+				catch( FatalSocketException e )
+				{
+					Loggers.nio.debug( "Connection forcibly closed" );
+					return;
+				}
 
-				Loggers.nio.trace( "Channel ({}) Continue reading", getDebugId() );
+				while( true )
+				{
+					ResponseReader reader;
+					synchronized( this )
+					{
+						reader = this.readerQueue.removeFirst();
+						boolean full = ClientSocket.this.readerQueueSize-- == ClientSocket.this.maxWindowSize;
+						// FIXME When window size is 1, socketGotAir is never called
+						if( ClientSocket.this.readerQueueSize == 0 )
+							ClientSocket.this.client.socketFinished( ClientSocket.this );
+						else if( full )
+							ClientSocket.this.client.socketGotAir( ClientSocket.this );
+					}
+
+					reader.incoming( this );
+
+					if( !isOpen() )
+						return;
+
+					synchronized( this.running )
+					{
+	//					Loggers.nio.trace( "Channel ({}) run: Running {} = {}", new Object[] { getDebugId(), DebugId.getId( this.running ), this.running.get() } );
+						if( getInputStream().available() == 0 /* && this.coordinator.stop() */ )
+						{
+							this.running.set( false );
+							listenRead(); // TODO The socket needs to be reading, otherwise client disconnects do not come through
+							complete = true;
+							return;
+						}
+					}
+
+					Loggers.nio.trace( "Channel ({}) Continue reading", getDebugId() );
+				}
+			}
+			catch( Exception e )
+			{
+				Loggers.nio.debug( "Channel ({}) Unhandled exception", getDebugId(), e );
+			}
+			finally
+			{
+				if( !complete )
+				{
+					close();
+					Loggers.nio.trace( "Channel ({}) Input task aborted", getDebugId() );
+				}
+				else
+				{
+					Loggers.nio.trace( "Channel ({}) Input task complete", getDebugId() );
+				}
 			}
 		}
 		catch( Exception e )
 		{
 			Loggers.nio.debug( "Channel ({}) Unhandled exception", getDebugId(), e );
-		}
-		finally
-		{
-			if( !complete )
-			{
-				close();
-				Loggers.nio.trace( "Channel ({}) Input task aborted", getDebugId() );
-			}
-			else
-			{
-				Loggers.nio.trace( "Channel ({}) Input task complete", getDebugId() );
-			}
 		}
 	}
 }

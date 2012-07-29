@@ -10,8 +10,8 @@ import solidstack.httpclient.Response;
 import solidstack.httpclient.ResponseProcessor;
 import solidstack.httpclient.nio.Client;
 import solidstack.nio.Loggers;
-import solidstack.nio.SocketMachine;
 import solidstack.nio.RequestQueueFullException;
+import solidstack.nio.SocketMachine;
 
 public class Runner
 {
@@ -36,8 +36,8 @@ public class Runner
 		this.client = new Client( "192.168.0.102", 8001, machine );
 //		this.client = new Client( "192.168.0.105", 8001, machine );
 //		this.client = new Client( "localhost", 8001, machine );
-		this.client.setMaxConnections( 4 );
-		this.client.setMaxWindowSize( 10000 );
+		this.client.setMaxConnections( 32 );
+		this.client.setMaxWindowSize( 100 );
 		this.request = new Request( "/" );
 //		this.request.setHeader( "Host", "www.nu.nl" );
 		this.runnable = new MyRunnable();
