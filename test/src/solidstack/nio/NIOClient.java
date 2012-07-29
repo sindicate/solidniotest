@@ -69,9 +69,10 @@ public class NIOClient
 			Assert.isTrue( socket.getActive() == 0 );
 
 		// TODO
-//		int active = this.writeable.size() + this.writing.size() + this.full.size();
-		int active = this.writing.size();
-		int total = this.idle.size() + this.writeable.size() + active + this.full.size();
+		int active = this.writeable.size() + this.writing.size() + this.full.size();
+		int total = this.idle.size() + active;
+//		int active = this.writing.size();
+//		int total = this.idle.size() + this.writeable.size() + active + this.full.size();
 
 		int requests = 0;
 		for( ClientSocket socket : this.writeable )

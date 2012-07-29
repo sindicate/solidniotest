@@ -17,6 +17,7 @@ public class ClientSocket extends Socket implements Runnable
 {
 	NIOClient client;
 	int maxWindowSize = 4;
+	int lowWater = 3;
 
 	final private AtomicBoolean running = new AtomicBoolean();
 
@@ -38,6 +39,7 @@ public class ClientSocket extends Socket implements Runnable
 	public void setMaxWindowSize( int windowSize )
 	{
 		this.maxWindowSize = windowSize;
+		this.lowWater = windowSize - windowSize / 10;
 	}
 
 	int getActive()
@@ -76,6 +78,7 @@ public class ClientSocket extends Socket implements Runnable
 									{
 										throw new FatalIOException( e );
 									}
+									sout.release();
 									ClientSocket.this.client.socketWriteComplete( ClientSocket.this );
 									complete = true;
 									return;
@@ -105,6 +108,7 @@ public class ClientSocket extends Socket implements Runnable
 							{
 								if( ClientSocket.this.readerQueueSize >= ClientSocket.this.maxWindowSize )
 								{
+									sout.release();
 									ClientSocket.this.full = true;
 									ClientSocket.this.client.socketWriteFull( ClientSocket.this );
 									complete = true;
@@ -116,8 +120,10 @@ public class ClientSocket extends Socket implements Runnable
 					finally
 					{
 						if( !complete )
+						{
+							sout.release();
 							ClientSocket.this.client.socketWriteError( ClientSocket.this );
-						sout.release();
+						}
 						Loggers.nio.trace( "Channel ({}) Ended request queue", getDebugId() );
 					}
 				}
@@ -223,14 +229,13 @@ public class ClientSocket extends Socket implements Runnable
 					{
 						reader = this.readerQueue.removeFirst();
 						ClientSocket.this.readerQueueSize --;
-						// FIXME When window size is 1, socketGotAir is never called
-						if( this.full )
+						if( this.full && ClientSocket.this.readerQueueSize <= this.lowWater )
 						{
 							// TODO Give air after more than 1 response, like 10%?
 							ClientSocket.this.client.socketGotAir( ClientSocket.this );
 							this.full = false;
 						}
-						if( ClientSocket.this.readerQueueSize == 0 )
+						if( ClientSocket.this.readerQueueSize == 0 && !this.full )
 							ClientSocket.this.client.socketFinished( ClientSocket.this );
 					}
 

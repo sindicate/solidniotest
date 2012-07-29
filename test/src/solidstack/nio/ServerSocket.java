@@ -124,8 +124,6 @@ public class ServerSocket extends Socket implements Runnable, ResponseListener
 											Response first = ServerSocket.this.responseQueue.peekFirst();
 											if( first == null || !first.isReady() )
 											{
-												ServerSocket.this.queueRunning = false; // TODO What if exception?
-												complete = true;
 												try
 												{
 													sout.flush(); // TODO Is this ok?
@@ -134,6 +132,9 @@ public class ServerSocket extends Socket implements Runnable, ResponseListener
 												{
 													throw new FatalIOException( e );
 												}
+												sout.release();
+												ServerSocket.this.queueRunning = false; // TODO What if exception?
+												complete = true;
 												return;
 											}
 											response = ServerSocket.this.responseQueue.removeFirst();
@@ -143,8 +144,10 @@ public class ServerSocket extends Socket implements Runnable, ResponseListener
 								finally
 								{
 									if( !complete )
+									{
 										close(); // TODO What about synchronized?
-									sout.release();
+										sout.release();
+									}
 									Loggers.nio.trace( "Channel ({}) Ended response queue", getDebugId() );
 								}
 							}
