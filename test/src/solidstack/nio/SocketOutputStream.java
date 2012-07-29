@@ -16,7 +16,7 @@ public class SocketOutputStream extends OutputStream
 	private Socket socket;
 	private ByteBuffer buffer;
 //	private AtomicBoolean block = new AtomicBoolean();
-	private AtomicReference<Thread> block = new AtomicReference<Thread>();
+	private AtomicReference<Thread> thread = new AtomicReference<Thread>();
 
 	public SocketOutputStream( Socket socket )
 	{
@@ -24,71 +24,83 @@ public class SocketOutputStream extends OutputStream
 		this.buffer = ByteBuffer.allocate( 8192 );
 	}
 
-	@Override
-	synchronized public void write( int b )
+	synchronized public void acquire()
 	{
-		if( !this.block.compareAndSet( null, Thread.currentThread() ) )
-			Assert.fail( "Channel (" + this.socket.getDebugId() + ") " + this.block.get().getName() );
-		try
+		if( !this.thread.compareAndSet( null, Thread.currentThread() ) )
 		{
-			Assert.isTrue( this.buffer.hasRemaining() );
-			this.buffer.put( (byte)b );
-			if( !this.buffer.hasRemaining() )
-				writeChannel();
-		}
-		finally
-		{
-			this.block.set( null );
+			Thread thread = this.thread.get();
+			if( thread != null )
+			{
+				Throwable t = new Throwable();
+				t.setStackTrace( thread.getStackTrace() );
+				Loggers.nio.error( "Stacktrace of conflicting thread", t );
+				Assert.fail( "Channel (" + this.socket.getDebugId() + ") " + thread.getName() );
+			}
+			else
+				Assert.fail( "Channel (" + this.socket.getDebugId() + ") ???" );
 		}
 	}
 
+	synchronized private void test()
+	{
+		if( this.thread.get() != Thread.currentThread() )
+		{
+			Thread thread = this.thread.get();
+			if( thread != null )
+			{
+				Throwable t = new Throwable();
+				t.setStackTrace( this.thread.get().getStackTrace() );
+				Loggers.nio.error( "Stacktrace of conflicting thread", t );
+			}
+			Assert.fail();
+		}
+	}
+
+	synchronized public void release()
+	{
+		this.thread.set( null );
+	}
+
 	@Override
-	// TODO Can we do this synchronized differently?
-	synchronized public void write( byte[] b, int off, int len )
+	public void write( int b )
+	{
+		test();
+		Assert.isTrue( this.buffer.hasRemaining() );
+		this.buffer.put( (byte)b );
+		if( !this.buffer.hasRemaining() )
+			writeChannel();
+	}
+
+	@Override
+	public void write( byte[] b, int off, int len )
 	{
 		if( len == 0 )
 			return;
 
-		if( !this.block.compareAndSet( null, Thread.currentThread() ) )
-			Assert.fail( "Channel (" + this.socket.getDebugId() + ") " + this.block.get().getName() );
-		try
+		test();
+		while( len > 0 )
 		{
-			while( len > 0 )
-			{
-				int l = len;
-				if( l > this.buffer.remaining() )
-					l = this.buffer.remaining();
-				this.buffer.put( b, off, l );
-				off += l;
-				len -= l;
-				if( !this.buffer.hasRemaining() )
-					writeChannel();
-			}
-		}
-		finally
-		{
-			this.block.set( null );
-		}
-	}
-
-	@Override
-	synchronized public void flush() throws IOException
-	{
-		if( !this.block.compareAndSet( null, Thread.currentThread() ) )
-			Assert.fail( "Channel (" + this.socket.getDebugId() + ") " + this.block.get().getName() );
-		try
-		{
-			if( this.buffer.position() > 0 )
+			int l = len;
+			if( l > this.buffer.remaining() )
+				l = this.buffer.remaining();
+			this.buffer.put( b, off, l );
+			off += l;
+			len -= l;
+			if( !this.buffer.hasRemaining() )
 				writeChannel();
 		}
-		finally
-		{
-			this.block.set( null );
-		}
 	}
 
 	@Override
-	synchronized public void close() throws IOException
+	public void flush() throws IOException
+	{
+		test();
+		if( this.buffer.position() > 0 )
+			writeChannel();
+	}
+
+	@Override
+	public void close() throws IOException
 	{
 		flush();
 		this.socket.close();

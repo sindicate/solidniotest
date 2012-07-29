@@ -101,12 +101,14 @@ public class ServerSocket extends Socket implements Runnable, ResponseListener
 							{
 								Loggers.nio.trace( "Channel ({}) Started response queue", getDebugId() );
 								boolean complete = false;
+								SocketOutputStream sout = getOutputStream();
+								sout.acquire();
 								try
 								{
 									Response response = firstResponse;
 									while( true )
 									{
-										ResponseOutputStream out = new ResponseOutputStream( getOutputStream() );
+										ResponseOutputStream out = new ResponseOutputStream( sout );
 										Loggers.nio.trace( "Channel ({}) Writing response", getDebugId() );
 										response.write( out );
 										try
@@ -126,7 +128,7 @@ public class ServerSocket extends Socket implements Runnable, ResponseListener
 												complete = true;
 												try
 												{
-													getOutputStream().flush(); // TODO Is this ok?
+													sout.flush(); // TODO Is this ok?
 												}
 												catch( IOException e )
 												{
@@ -142,6 +144,7 @@ public class ServerSocket extends Socket implements Runnable, ResponseListener
 								{
 									if( !complete )
 										close(); // TODO What about synchronized?
+									sout.release();
 									Loggers.nio.trace( "Channel ({}) Ended response queue", getDebugId() );
 								}
 							}

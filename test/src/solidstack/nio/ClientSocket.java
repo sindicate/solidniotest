@@ -22,6 +22,7 @@ public class ClientSocket extends Socket implements Runnable
 
 	LinkedList<ResponseReader> readerQueue = new LinkedList<ResponseReader>();
 	volatile int readerQueueSize;
+	boolean full;
 
 
 	public ClientSocket( SocketMachine machine )
@@ -51,66 +52,78 @@ public class ClientSocket extends Socket implements Runnable
 			@Override
 			public void run()
 			{
-				Loggers.nio.trace( "Channel ({}) Started request queue", getDebugId() );
-				boolean complete = false;
 				try
 				{
-					while( true )
+					Loggers.nio.trace( "Channel ({}) Started request queue", getDebugId() );
+					boolean complete = false;
+					SocketOutputStream sout = getOutputStream();
+					sout.acquire();
+					try
 					{
-						RequestWriter writer;
-						synchronized( ClientSocket.this )
+						while( true )
 						{
-							writer = ClientSocket.this.client.popRequest();
-							if( writer == null )
+							RequestWriter writer;
+							synchronized( ClientSocket.this )
 							{
-								try
+								writer = ClientSocket.this.client.popRequest();
+								if( writer == null )
 								{
-									getOutputStream().flush(); // TODO Is this ok?
+									try
+									{
+										sout.flush(); // TODO Is this ok?
+									}
+									catch( IOException e )
+									{
+										throw new FatalIOException( e );
+									}
+									ClientSocket.this.client.socketWriteComplete( ClientSocket.this );
+									complete = true;
+									return;
 								}
-								catch( IOException e )
+							}
+
+							ResponseReader reader = writer.getResponseReader();
+							synchronized( ClientSocket.this )
+							{
+								ClientSocket.this.readerQueue.add( reader );
+								ClientSocket.this.readerQueueSize ++;
+							}
+
+							ResponseOutputStream out = new ResponseOutputStream( sout );
+							Loggers.nio.trace( "Channel ({}) Writing request", getDebugId() );
+							writer.write( out );
+							try
+							{
+								out.close(); // Need close() for the chunkedoutputstream
+							}
+							catch( IOException e )
+							{
+								throw new FatalIOException( e );
+							}
+
+							synchronized( ClientSocket.this )
+							{
+								if( ClientSocket.this.readerQueueSize >= ClientSocket.this.maxWindowSize )
 								{
-									throw new FatalIOException( e );
+									ClientSocket.this.full = true;
+									ClientSocket.this.client.socketWriteFull( ClientSocket.this );
+									complete = true;
+									return;
 								}
-								ClientSocket.this.client.socketWriteComplete( ClientSocket.this );
-								complete = true;
-								return;
 							}
 						}
-
-						ResponseReader reader = writer.getResponseReader();
-						boolean full;
-						synchronized( ClientSocket.this )
-						{
-							ClientSocket.this.readerQueue.add( reader );
-							full = ++ClientSocket.this.readerQueueSize >= ClientSocket.this.maxWindowSize;
-							if( full )
-								ClientSocket.this.client.socketWriteFull( ClientSocket.this );
-						}
-
-						ResponseOutputStream out = new ResponseOutputStream( getOutputStream() );
-						Loggers.nio.trace( "Channel ({}) Writing request", getDebugId() );
-						writer.write( out );
-						try
-						{
-							out.close(); // Need close() for the chunkedoutputstream
-						}
-						catch( IOException e )
-						{
-							throw new FatalIOException( e );
-						}
-
-						if( full )
-						{
-							complete = true;
-							return;
-						}
+					}
+					finally
+					{
+						if( !complete )
+							ClientSocket.this.client.socketWriteError( ClientSocket.this );
+						sout.release();
+						Loggers.nio.trace( "Channel ({}) Ended request queue", getDebugId() );
 					}
 				}
-				finally
+				catch( Exception e )
 				{
-					if( !complete )
-						ClientSocket.this.client.socketWriteError( ClientSocket.this );
-					Loggers.nio.trace( "Channel ({}) Ended request queue", getDebugId() );
+					Loggers.nio.debug( "Channel ({}) Unhandled exception", getDebugId(), e );
 				}
 			}
 		} );
@@ -209,12 +222,16 @@ public class ClientSocket extends Socket implements Runnable
 					synchronized( this )
 					{
 						reader = this.readerQueue.removeFirst();
-						boolean full = ClientSocket.this.readerQueueSize-- == ClientSocket.this.maxWindowSize;
+						ClientSocket.this.readerQueueSize --;
 						// FIXME When window size is 1, socketGotAir is never called
+						if( this.full )
+						{
+							// TODO Give air after more than 1 response, like 10%?
+							ClientSocket.this.client.socketGotAir( ClientSocket.this );
+							this.full = false;
+						}
 						if( ClientSocket.this.readerQueueSize == 0 )
 							ClientSocket.this.client.socketFinished( ClientSocket.this );
-						else if( full )
-							ClientSocket.this.client.socketGotAir( ClientSocket.this );
 					}
 
 					reader.incoming( this );

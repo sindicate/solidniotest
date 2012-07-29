@@ -68,7 +68,10 @@ public class NIOClient
 		for( ClientSocket socket : this.idle )
 			Assert.isTrue( socket.getActive() == 0 );
 
-		int active = this.writeable.size() + this.writing.size() + this.full.size();
+		// TODO
+//		int active = this.writeable.size() + this.writing.size() + this.full.size();
+		int active = this.writing.size();
+		int total = this.idle.size() + this.writeable.size() + active + this.full.size();
 
 		int requests = 0;
 		for( ClientSocket socket : this.writeable )
@@ -78,7 +81,7 @@ public class NIOClient
 		for( ClientSocket socket : this.full )
 			requests += socket.getActive();
 
-		return new int[] { this.idle.size() + active, active, requests, this.queue.size() };
+		return new int[] { total, active, requests, this.queue.size() };
 	}
 
 	synchronized public void socketWriteComplete( ClientSocket socket )
@@ -101,25 +104,28 @@ public class NIOClient
 
 	synchronized public void socketClosed( ClientSocket socket )
 	{
-		Assert.isTrue( this.idle.remove( socket ) || this.writeable.remove( socket ) || this.writing.remove( socket ) || this.full.remove( socket ) );
+		// TODO
+		//Assert.isTrue( this.idle.remove( socket ) || this.writeable.remove( socket ) || this.writing.remove( socket ) || this.full.remove( socket ) );
+		this.idle.remove( socket );
+		this.writeable.remove( socket );
+		this.writing.remove( socket );
+		this.full.remove( socket );
 	}
 
 	synchronized public void socketGotAir( ClientSocket socket )
 	{
 		Assert.isTrue( this.full.remove( socket ) );
-		if( this.queue.isEmpty() )
-			this.writeable.add( socket );
-		else
-		{
-			this.writing.add( socket );
-			socket.asyncProcessWriteQueue();
-		}
+//		this.writeable.add( socket );
+		this.writing.add( socket );
+		socket.asyncProcessWriteQueue();
 	}
 
 	synchronized public void socketFinished( ClientSocket socket )
 	{
 		if( this.writeable.remove( socket ) )
 			this.idle.add( socket );
+		else
+			Assert.isTrue( this.writing.contains( socket ) );
 	}
 
 	public void request( RequestWriter writer )
@@ -136,18 +142,23 @@ public class NIOClient
 			if( this.writing.size() > 0 ) // FIXME But what if the writing socket already decided to end?
 				return;
 
-			if( this.writeable.size() > 0 )
-			{
-				ClientSocket socket = this.writeable.remove( 0 );
-				this.writing.add( socket );
-				socket.asyncProcessWriteQueue();
-			}
-			else if( this.idle.size() > 0 )
-			{
-				ClientSocket socket = this.idle.remove( 0 );
-				this.writing.add( socket );
-				socket.asyncProcessWriteQueue();
-			}
+			start();
+		}
+	}
+
+	void start()
+	{
+		if( this.writeable.size() > 0 )
+		{
+			ClientSocket socket = this.writeable.remove( 0 );
+			this.writing.add( socket );
+			socket.asyncProcessWriteQueue();
+		}
+		else if( this.idle.size() > 0 )
+		{
+			ClientSocket socket = this.idle.remove( 0 );
+			this.writing.add( socket );
+			socket.asyncProcessWriteQueue();
 		}
 	}
 
@@ -184,6 +195,8 @@ public class NIOClient
 						all = NIOClient.this.idle.size() + NIOClient.this.writeable.size() + NIOClient.this.writing.size() + NIOClient.this.full.size();
 						Entry entry = NIOClient.this.queue.peekFirst();
 						age = entry != null ? entry.queued : 0;
+						if( NIOClient.this.queue.size() > 0 && NIOClient.this.writing.size() == 0 )
+							NIOClient.this.start();
 					}
 					if( all < NIOClient.this.maxConnections )
 					{
