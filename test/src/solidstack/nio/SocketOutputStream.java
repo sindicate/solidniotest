@@ -29,13 +29,17 @@ public class SocketOutputStream extends OutputStream
 	{
 		if( !this.block.compareAndSet( null, Thread.currentThread() ) )
 			Assert.fail( "Channel (" + this.socket.getDebugId() + ") " + this.block.get().getName() );
-
-		Assert.isTrue( this.buffer.hasRemaining() );
-		this.buffer.put( (byte)b );
-		if( !this.buffer.hasRemaining() )
-			writeChannel();
-
-		this.block.set( null );
+		try
+		{
+			Assert.isTrue( this.buffer.hasRemaining() );
+			this.buffer.put( (byte)b );
+			if( !this.buffer.hasRemaining() )
+				writeChannel();
+		}
+		finally
+		{
+			this.block.set( null );
+		}
 	}
 
 	@Override
@@ -47,20 +51,24 @@ public class SocketOutputStream extends OutputStream
 
 		if( !this.block.compareAndSet( null, Thread.currentThread() ) )
 			Assert.fail( "Channel (" + this.socket.getDebugId() + ") " + this.block.get().getName() );
-
-		while( len > 0 )
+		try
 		{
-			int l = len;
-			if( l > this.buffer.remaining() )
-				l = this.buffer.remaining();
-			this.buffer.put( b, off, l );
-			off += l;
-			len -= l;
-			if( !this.buffer.hasRemaining() )
-				writeChannel();
+			while( len > 0 )
+			{
+				int l = len;
+				if( l > this.buffer.remaining() )
+					l = this.buffer.remaining();
+				this.buffer.put( b, off, l );
+				off += l;
+				len -= l;
+				if( !this.buffer.hasRemaining() )
+					writeChannel();
+			}
 		}
-
-		this.block.set( null );
+		finally
+		{
+			this.block.set( null );
+		}
 	}
 
 	@Override
@@ -68,11 +76,15 @@ public class SocketOutputStream extends OutputStream
 	{
 		if( !this.block.compareAndSet( null, Thread.currentThread() ) )
 			Assert.fail( "Channel (" + this.socket.getDebugId() + ") " + this.block.get().getName() );
-
-		if( this.buffer.position() > 0 )
-			writeChannel();
-
-		this.block.set( null );
+		try
+		{
+			if( this.buffer.position() > 0 )
+				writeChannel();
+		}
+		finally
+		{
+			this.block.set( null );
+		}
 	}
 
 	@Override
@@ -102,8 +114,10 @@ public class SocketOutputStream extends OutputStream
 		SocketChannel channel = this.socket.getChannel();
 		int id = DebugId.getId( channel );
 
-		Assert.isTrue( channel.isOpen(), "Channel is closed" );
-		Assert.isTrue( channel.isConnected() );
+		if( !channel.isOpen() )
+			Assert.fail( "Channel (" + id + ") is closed" );
+		if( !channel.isConnected() )
+			Assert.fail( "Channel (" + id + ") is not connected" );
 		this.buffer.flip();
 		Assert.isTrue( this.buffer.hasRemaining() );
 

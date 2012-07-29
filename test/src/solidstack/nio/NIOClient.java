@@ -20,19 +20,26 @@ public class NIOClient
 	int maxConnections = 100;
 	private int maxQueueSize = 100000;
 	int maxWindowSize = 1000000;
+	int maxQueueAge = 1000;
 
 	List< ClientSocket > idle = new ArrayList<ClientSocket>();
 	List< ClientSocket > writeable = new ArrayList<ClientSocket>();
 	List< ClientSocket > writing = new ArrayList<ClientSocket>();
 	List< ClientSocket > full = new ArrayList<ClientSocket>();
 
-	// Synchronized together
-//	SocketPool pool = new SocketPool();
-	private LinkedList<RequestWriter> queue = new LinkedList<RequestWriter>();
+	static private class Entry
+	{
+		long queued;
+		RequestWriter writer;
+		public Entry( RequestWriter writer )
+		{
+			this.writer = writer;
+			this.queued = System.currentTimeMillis();
+		}
+	}
+	LinkedList<Entry> queue = new LinkedList<Entry>();
 
 	private ConnectingThread thread;
-
-//	private boolean running;
 
 	public NIOClient( String hostname, int port, SocketMachine machine )
 	{
@@ -124,7 +131,7 @@ public class NIOClient
 		{
 			if( this.queue.size() >= this.maxQueueSize )
 				throw new RequestQueueFullException();
-			this.queue.add( writer );
+			this.queue.add( new Entry( writer ) );
 
 			if( this.writing.size() > 0 ) // FIXME But what if the writing socket already decided to end?
 				return;
@@ -146,7 +153,8 @@ public class NIOClient
 
 	synchronized public RequestWriter popRequest()
 	{
-		return this.queue.pollFirst();
+		Entry result = this.queue.pollFirst();
+		return result != null ? result.writer : null;
 	}
 
 	public void timeout()
@@ -170,30 +178,38 @@ public class NIOClient
 				while( !isInterrupted() )
 				{
 					int all;
+					long age;
 					synchronized( NIOClient.this )
 					{
 						all = NIOClient.this.idle.size() + NIOClient.this.writeable.size() + NIOClient.this.writing.size() + NIOClient.this.full.size();
+						Entry entry = NIOClient.this.queue.peekFirst();
+						age = entry != null ? entry.queued : 0;
 					}
 					if( all < NIOClient.this.maxConnections )
-						try
+					{
+						if( all == 0 || age != 0 && age + NIOClient.this.maxQueueAge < System.currentTimeMillis() )
 						{
-							Loggers.nio.debug( "Connecting..." );
-							ClientSocket socket = NIOClient.this.machine.connect( NIOClient.this.hostname, NIOClient.this.port );
-							Loggers.nio.debug( "New socket connected" );
-							socket.setClient( NIOClient.this );
-							socket.setMaxWindowSize( NIOClient.this.maxWindowSize );
-							synchronized( NIOClient.this )
+							try
 							{
-								NIOClient.this.writing.add( socket );
+								Loggers.nio.debug( "Connecting..." );
+								ClientSocket socket = NIOClient.this.machine.connect( NIOClient.this.hostname, NIOClient.this.port );
+								Loggers.nio.debug( "New socket connected" );
+								socket.setClient( NIOClient.this );
+								socket.setMaxWindowSize( NIOClient.this.maxWindowSize );
+								synchronized( NIOClient.this )
+								{
+									NIOClient.this.writing.add( socket );
+								}
+								socket.asyncProcessWriteQueue();
+//								release( socket ); // TODO Possible to do this outside the synchronized block? Or remove this synchronized block?
+//								Loggers.nio.trace( "Added socket, pool size = {}, expand = {}", NIOClient.this.pool.all(), NIOClient.this.expand.get() );
 							}
-							socket.asyncProcessWriteQueue();
-//							release( socket ); // TODO Possible to do this outside the synchronized block? Or remove this synchronized block?
-//							Loggers.nio.trace( "Added socket, pool size = {}, expand = {}", NIOClient.this.pool.all(), NIOClient.this.expand.get() );
+							catch( ConnectException e )
+							{
+								Loggers.nio.error( e.toString() );
+							}
 						}
-						catch( ConnectException e )
-						{
-							Loggers.nio.error( e.toString() );
-						}
+					}
 					sleep( 1000 );
 				}
 			}

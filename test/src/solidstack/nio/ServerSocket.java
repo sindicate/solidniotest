@@ -97,50 +97,57 @@ public class ServerSocket extends Socket implements Runnable, ResponseListener
 						@Override
 						public void run()
 						{
-							Loggers.nio.trace( "Channel ({}) Started response queue", getDebugId() );
-							boolean complete = false;
 							try
 							{
-								Response response = firstResponse;
-								while( true )
+								Loggers.nio.trace( "Channel ({}) Started response queue", getDebugId() );
+								boolean complete = false;
+								try
 								{
-									ResponseOutputStream out = new ResponseOutputStream( getOutputStream() );
-									Loggers.nio.trace( "Channel ({}) Writing response", getDebugId() );
-									response.write( out );
-									try
+									Response response = firstResponse;
+									while( true )
 									{
-										out.close(); // Need close() for the chunkedoutputstream
-									}
-									catch( IOException e )
-									{
-										throw new FatalIOException( e );
-									}
-									synchronized( ServerSocket.this.responseQueue )
-									{
-										Response first = ServerSocket.this.responseQueue.peekFirst();
-										if( first == null || !first.isReady() )
+										ResponseOutputStream out = new ResponseOutputStream( getOutputStream() );
+										Loggers.nio.trace( "Channel ({}) Writing response", getDebugId() );
+										response.write( out );
+										try
 										{
-											ServerSocket.this.queueRunning = false; // TODO What if exception?
-											complete = true;
-											try
-											{
-												getOutputStream().flush(); // TODO Is this ok?
-											}
-											catch( IOException e )
-											{
-												throw new FatalIOException( e );
-											}
-											return;
+											out.close(); // Need close() for the chunkedoutputstream
 										}
-										response = ServerSocket.this.responseQueue.removeFirst();
+										catch( IOException e )
+										{
+											throw new FatalIOException( e );
+										}
+										synchronized( ServerSocket.this.responseQueue )
+										{
+											Response first = ServerSocket.this.responseQueue.peekFirst();
+											if( first == null || !first.isReady() )
+											{
+												ServerSocket.this.queueRunning = false; // TODO What if exception?
+												complete = true;
+												try
+												{
+													getOutputStream().flush(); // TODO Is this ok?
+												}
+												catch( IOException e )
+												{
+													throw new FatalIOException( e );
+												}
+												return;
+											}
+											response = ServerSocket.this.responseQueue.removeFirst();
+										}
 									}
 								}
+								finally
+								{
+									if( !complete )
+										close(); // TODO What about synchronized?
+									Loggers.nio.trace( "Channel ({}) Ended response queue", getDebugId() );
+								}
 							}
-							finally
+							catch( Exception e )
 							{
-								if( !complete )
-									close(); // TODO What about synchronized?
-								Loggers.nio.trace( "Channel ({}) Ended response queue", getDebugId() );
+								Loggers.nio.debug( "Channel ({}) Unhandled exception", getDebugId(), e );
 							}
 						}
 					} );

@@ -1,13 +1,14 @@
 package solidstack.nio.test;
 
+import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
 
+import solidstack.httpserver.HttpException;
 import solidstack.httpserver.HttpResponse;
 import solidstack.httpserver.RequestContext;
 import solidstack.httpserver.ResponseOutputStream;
 import solidstack.httpserver.Servlet;
-import solidstack.nio.Loggers;
 
 
 public class BackEndRootServlet implements Servlet
@@ -17,7 +18,7 @@ public class BackEndRootServlet implements Servlet
 		HttpResponse response = new HttpResponse()
 		{
 			@Override
-			public void write( ResponseOutputStream out )
+			public void write( ResponseOutputStream out ) throws HttpException
 			{
 				try
 				{
@@ -26,9 +27,9 @@ public class BackEndRootServlet implements Servlet
 					writer.write( "Hello World!\n" );
 					writer.flush();
 				}
-				catch( Exception e )
+				catch( IOException e )
 				{
-					Loggers.nio.debug( "BackEnd Unhandled exception", e );
+					throw new HttpException( e );
 				}
 			}
 		};
