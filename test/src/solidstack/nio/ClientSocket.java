@@ -39,7 +39,7 @@ public class ClientSocket extends Socket implements Runnable
 	public void setMaxWindowSize( int windowSize )
 	{
 		this.maxWindowSize = windowSize;
-		this.lowWater = windowSize - windowSize / 10;
+		this.lowWater = windowSize - windowSize / 2;
 	}
 
 	int getActive()
@@ -231,8 +231,7 @@ public class ClientSocket extends Socket implements Runnable
 						ClientSocket.this.readerQueueSize --;
 						if( this.full && ClientSocket.this.readerQueueSize <= this.lowWater )
 						{
-							// TODO Give air after more than 1 response, like 10%?
-							ClientSocket.this.client.socketGotAir( ClientSocket.this );
+							ClientSocket.this.client.socketLow( ClientSocket.this );
 							this.full = false;
 						}
 						if( ClientSocket.this.readerQueueSize == 0 && !this.full )

@@ -113,7 +113,7 @@ public class NIOClient
 		this.full.remove( socket );
 	}
 
-	synchronized public void socketGotAir( ClientSocket socket )
+	synchronized public void socketLow( ClientSocket socket )
 	{
 		Assert.isTrue( this.full.remove( socket ) );
 //		this.writeable.add( socket );
